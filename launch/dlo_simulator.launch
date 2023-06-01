@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<launch>   
+    <!-- Launch the DLO Simulation that reads the location data of robots and attaches the dlo corners to those locations  -->
+    <node type="dlo_simulator_stiff_rods_node" name="dlo_simulator_stiff_rods_node" pkg="dlo_simulator_stiff_rods" output="screen">
+        <rosparam command="load" file="$(find dlo_simulator_stiff_rods)/config/dlo_simulator.yaml" subst_value="true" />
+    </node>
+</launch>
