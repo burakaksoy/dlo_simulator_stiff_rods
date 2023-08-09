@@ -221,7 +221,7 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
             // Create a subscriber for each custom static particle 
             for (const int& particle_id : custom_static_particles_) {
                 std::string topic = custom_static_particles_odom_topic_prefix_ + std::to_string(particle_id);
-                ros::Subscriber sub = nh_.subscribe<nav_msgs::Odometry>(topic, 1,
+                ros::Subscriber sub = nh_.subscribe<nav_msgs::Odometry>(topic, 10,
                                                                         [this, particle_id](const nav_msgs::Odometry::ConstPtr& odom_msg) { 
                                                                             this->odometryCb_custom_static_particles(odom_msg, particle_id); }
                                                                         );
@@ -597,6 +597,9 @@ void DloSimulator::drawRvizRod(const std::vector<Eigen::Matrix<Real,3,1>> *poses
 }
 
 void DloSimulator::odometryCb_custom_static_particles(const nav_msgs::Odometry::ConstPtr& odom_msg, const int& id) {
+    // // With some kind of self lock to prevent collision with simulation
+    boost::recursive_mutex::scoped_lock lock(mtx_);
+
     const Real x = odom_msg->pose.pose.position.x;
     const Real y = odom_msg->pose.pose.position.y;
     const Real z = odom_msg->pose.pose.position.z + dlo_rob_z_offset_;
@@ -613,6 +616,9 @@ void DloSimulator::odometryCb_custom_static_particles(const nav_msgs::Odometry::
 }
 
 void DloSimulator::odometryCb_01(const nav_msgs::Odometry::ConstPtr odom_msg){
+    // // With some kind of self lock to prevent collision with simulation
+    boost::recursive_mutex::scoped_lock lock(mtx_);
+
     const Real & x = odom_msg->pose.pose.position.x;
     const Real & y = odom_msg->pose.pose.position.y;
     const Real & z = odom_msg->pose.pose.position.z + dlo_rob_z_offset_;
@@ -644,6 +650,9 @@ void DloSimulator::odometryCb_01(const nav_msgs::Odometry::ConstPtr odom_msg){
 }
 
 void DloSimulator::odometryCb_02(const nav_msgs::Odometry::ConstPtr odom_msg){
+    // // With some kind of self lock to prevent collision with simulation
+    boost::recursive_mutex::scoped_lock lock(mtx_);
+
     const Real & x = odom_msg->pose.pose.position.x;
     const Real & y = odom_msg->pose.pose.position.y;
     const Real & z = odom_msg->pose.pose.position.z + dlo_rob_z_offset_;
@@ -675,6 +684,9 @@ void DloSimulator::odometryCb_02(const nav_msgs::Odometry::ConstPtr odom_msg){
 }
 
 void DloSimulator::odometryCb_03(const nav_msgs::Odometry::ConstPtr odom_msg){
+    // // With some kind of self lock to prevent collision with simulation
+    boost::recursive_mutex::scoped_lock lock(mtx_);
+
     const Real & x = odom_msg->pose.pose.position.x;
     const Real & y = odom_msg->pose.pose.position.y;
     const Real & z = odom_msg->pose.pose.position.z + dlo_rob_z_offset_;
@@ -706,6 +718,9 @@ void DloSimulator::odometryCb_03(const nav_msgs::Odometry::ConstPtr odom_msg){
 }
 
 void DloSimulator::odometryCb_04(const nav_msgs::Odometry::ConstPtr odom_msg){
+    // // With some kind of self lock to prevent collision with simulation
+    boost::recursive_mutex::scoped_lock lock(mtx_);
+
     const Real & x = odom_msg->pose.pose.position.x;
     const Real & y = odom_msg->pose.pose.position.y;
     const Real & z = odom_msg->pose.pose.position.z + dlo_rob_z_offset_;
