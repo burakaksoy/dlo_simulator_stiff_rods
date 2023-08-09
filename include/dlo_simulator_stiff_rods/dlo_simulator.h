@@ -73,6 +73,9 @@ private:
     void odometryCb_02(const nav_msgs::Odometry::ConstPtr odom_msg);
     void odometryCb_03(const nav_msgs::Odometry::ConstPtr odom_msg);
     void odometryCb_04(const nav_msgs::Odometry::ConstPtr odom_msg);
+
+    void odometryCb_custom_static_particles(const nav_msgs::Odometry::ConstPtr& odom_msg, const int& id);
+    
     
     // Service functions
     bool updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res);
@@ -97,6 +100,9 @@ private:
     ros::Subscriber sub_odom_02_;
     ros::Subscriber sub_odom_03_;
     ros::Subscriber sub_odom_04_;
+
+    // Define the vector of subscribers
+    std::vector<ros::Subscriber> custom_static_particles_odom_subscribers_;
     
     ros::Timer timer_render_;
     ros::Timer timer_simulate_;
@@ -135,6 +141,9 @@ private:
     Real initial_height_; // initial dlo height from ground (m)
 
     int num_hang_corners_; // num of corners to hang dlo from (options: 0,1,2)
+    std::vector<int> custom_static_particles_; // particle ids to set as static
+
+    std::string custom_static_particles_odom_topic_prefix_;
 
     bool use_direct_kkt_solver_;
 

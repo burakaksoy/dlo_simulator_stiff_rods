@@ -581,6 +581,17 @@ void Dlo::hangFromCorners(const int &num_corners){
     }
 }
 
+void Dlo::setStaticParticles(const std::vector<int> &particles){
+    for (const int& i : particles)
+    {
+        if (inv_mass_[i] != 0.0){
+            inv_mass_[i] = 0.0;
+            inv_iner_[i].setZero();
+            attached_ids_.push_back(i); // add fixed particle id to the attached_ids_ vector               
+        }
+    }
+}
+
 void Dlo::preSolve(const Real &dt, const Eigen::Matrix<Real,3,1> &gravity){
     #pragma omp parallel default(shared)
     {

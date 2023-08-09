@@ -76,6 +76,9 @@ DloSimulator::~DloSimulator() {
     nh_local_.deleteParam("initial_height");
 
     nh_local_.deleteParam("num_hang_corners");
+    nh_local_.deleteParam("custom_static_particles");
+
+    nh_local_.deleteParam("custom_static_particles_odom_topic_prefix");
 
     nh_local_.deleteParam("use_direct_kkt_solver");
 
@@ -142,6 +145,9 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
     nh_local_.param<Real>("initial_height", initial_height_, 1.0);
 
     nh_local_.param<int>("num_hang_corners", num_hang_corners_, 1);
+    nh_local_.param("custom_static_particles", custom_static_particles_, std::vector<int>());
+
+    nh_local_.param<std::string>("custom_static_particles_odom_topic_prefix", custom_static_particles_odom_topic_prefix_, std::string("custom_static_particles_odom_"));
 
     nh_local_.param<bool>("use_direct_kkt_solver", use_direct_kkt_solver_, false);
     
@@ -204,10 +210,24 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
     // Hang dlo from corners
     dlo_.hangFromCorners(num_hang_corners_);
 
+    // Set static particles
+    dlo_.setStaticParticles(custom_static_particles_);
+
     if (p_active_ != prev_active) {
         if (p_active_) {
             // Create visualization marker publisher
             pub_dlo_points_ = nh_.advertise<visualization_msgs::Marker>(dlo_points_topic_name_, 1);
+
+            // Create a subscriber for each custom static particle 
+            for (const int& particle_id : custom_static_particles_) {
+                std::string topic = custom_static_particles_odom_topic_prefix_ + std::to_string(particle_id);
+                ros::Subscriber sub = nh_.subscribe<nav_msgs::Odometry>(topic, 1,
+                                                                        [this, particle_id](const nav_msgs::Odometry::ConstPtr& odom_msg) { 
+                                                                            this->odometryCb_custom_static_particles(odom_msg, particle_id); }
+                                                                        );
+                custom_static_particles_odom_subscribers_.push_back(sub);
+            }
+
 
             // Create subscribers
             sub_odom_01_ = nh_.subscribe(odom_01_topic_name_, 1, &DloSimulator::odometryCb_01, this);
@@ -242,6 +262,11 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
             sub_odom_02_.shutdown();
             sub_odom_03_.shutdown();
             sub_odom_04_.shutdown();
+
+            for(ros::Subscriber& subscriber : custom_static_particles_odom_subscribers_) {
+                subscriber.shutdown();
+            }
+
             /*
             // Stop publishers
             pub_wrench_stamped_01_.shutdown();
@@ -571,6 +596,21 @@ void DloSimulator::drawRvizRod(const std::vector<Eigen::Matrix<Real,3,1>> *poses
     publishRvizLines(dloRVIZEdges);
 }
 
+void DloSimulator::odometryCb_custom_static_particles(const nav_msgs::Odometry::ConstPtr& odom_msg, const int& id) {
+    const Real x = odom_msg->pose.pose.position.x;
+    const Real y = odom_msg->pose.pose.position.y;
+    const Real z = odom_msg->pose.pose.position.z + dlo_rob_z_offset_;
+
+    const Real qw = odom_msg->pose.pose.orientation.w;
+    const Real qx = odom_msg->pose.pose.orientation.x;
+    const Real qy = odom_msg->pose.pose.orientation.y;
+    const Real qz = odom_msg->pose.pose.orientation.z;
+    
+    Eigen::Matrix<Real,3,1> pos(x, y, z);
+    Eigen::Quaternion<Real> ori(qw,qx,qy,qz);
+
+    dlo_.updateAttachedPose(id, pos, ori);
+}
 
 void DloSimulator::odometryCb_01(const nav_msgs::Odometry::ConstPtr odom_msg){
     const Real & x = odom_msg->pose.pose.position.x;
@@ -599,7 +639,7 @@ void DloSimulator::odometryCb_01(const nav_msgs::Odometry::ConstPtr odom_msg){
     else
     {
         // tell sim object to update its position
-            dlo_.updateAttachedPose(rob_01_attached_id_, pos, ori);
+        dlo_.updateAttachedPose(rob_01_attached_id_, pos, ori);
     }
 }
 

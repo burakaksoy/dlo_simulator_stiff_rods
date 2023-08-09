@@ -84,7 +84,7 @@ public:
     void postSolve(const Real &dt);
 
     void hangFromCorners(const int &num_corners);
-
+    void setStaticParticles(const std::vector<int> &particles);
     
     int attachNearest(const Eigen::Matrix<Real,3,1> &pos);
     void updateAttachedPose(const int &id, 
