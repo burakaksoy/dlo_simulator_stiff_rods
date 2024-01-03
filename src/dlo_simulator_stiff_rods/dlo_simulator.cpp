@@ -97,17 +97,11 @@ DloSimulator::~DloSimulator() {
 
     nh_local_.deleteParam("point_marker_scale");
 
-    nh_local_.deleteParam("point_marker_color_r");
-    nh_local_.deleteParam("point_marker_color_g");
-    nh_local_.deleteParam("point_marker_color_b");
-    nh_local_.deleteParam("point_marker_color_a");
+    nh_local_.deleteParam("point_marker_color_rgba");
 
     nh_local_.deleteParam("line_marker_scale_multiplier");
     
-    nh_local_.deleteParam("line_marker_color_r");
-    nh_local_.deleteParam("line_marker_color_g");
-    nh_local_.deleteParam("line_marker_color_b");
-    nh_local_.deleteParam("line_marker_color_a");
+    nh_local_.deleteParam("line_marker_color_rgba");
 
     /*
     nh_local_.deleteParam("wrench_01_topic_name");
@@ -195,18 +189,11 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
 
     nh_local_.param<Real>("point_marker_scale",   point_marker_scale_,   0.015);
 
-    nh_local_.param<Real>("point_marker_color_r", point_marker_color_r_, 1.0);
-    nh_local_.param<Real>("point_marker_color_g", point_marker_color_g_, 0.0);
-    nh_local_.param<Real>("point_marker_color_b", point_marker_color_b_, 1.0);
-    nh_local_.param<Real>("point_marker_color_a", point_marker_color_a_, 1.0);
+    nh_local_.param("point_marker_color_rgba", point_marker_color_rgba_, std::vector<Real>({1.0, 0.0, 1.0, 1.0}));
 
     nh_local_.param<Real>("line_marker_scale_multiplier", line_marker_scale_multiplier_, 1.0);
-    
-    nh_local_.param<Real>("line_marker_color_r",  line_marker_color_r_,  0.0);
-    nh_local_.param<Real>("line_marker_color_g",  line_marker_color_g_,  1.0);
-    nh_local_.param<Real>("line_marker_color_b",  line_marker_color_b_,  1.0);
-    nh_local_.param<Real>("line_marker_color_a",  line_marker_color_a_,  1.0);
 
+    nh_local_.param("line_marker_color_rgba", line_marker_color_rgba_, std::vector<Real>({0.0, 1.0, 1.0, 1.0}));
 
     // Set timer periods based on the parameters
     timer_render_.setPeriod(ros::Duration(1.0/rendering_rate_));
@@ -558,10 +545,10 @@ void DloSimulator::publishRvizPoints(const std::vector<geometry_msgs::Point> &po
     m.scale.y = point_marker_scale_;
     m.scale.z = point_marker_scale_;
 
-    m.color.r = point_marker_color_r_;
-    m.color.g = point_marker_color_g_;
-    m.color.b = point_marker_color_b_;
-    m.color.a = point_marker_color_a_;
+    m.color.r = point_marker_color_rgba_[0];
+    m.color.g = point_marker_color_rgba_[1];
+    m.color.b = point_marker_color_rgba_[2];
+    m.color.a = point_marker_color_rgba_[3];
 
     pub_dlo_points_.publish(m);
 }
@@ -583,10 +570,10 @@ void DloSimulator::publishRvizLines(const std::vector<geometry_msgs::Point> &poi
     // LINE_STRIP/LINE_LIST markers use only the x component of scale, for the line width
     m.scale.x = dlo_r_*line_marker_scale_multiplier_;
 
-    m.color.r = line_marker_color_r_;
-    m.color.g = line_marker_color_g_;
-    m.color.b = line_marker_color_b_;
-    m.color.a = line_marker_color_a_;
+    m.color.r = line_marker_color_rgba_[0];
+    m.color.g = line_marker_color_rgba_[1];
+    m.color.b = line_marker_color_rgba_[2];
+    m.color.a = line_marker_color_rgba_[3];
 
     pub_dlo_points_.publish(m);
 }

@@ -175,17 +175,11 @@ private:
 
     Real point_marker_scale_;
 
-    Real point_marker_color_r_;
-    Real point_marker_color_g_;
-    Real point_marker_color_b_;
-    Real point_marker_color_a_;
+    std::vector<Real> point_marker_color_rgba_;
 
     Real line_marker_scale_multiplier_;
 
-    Real line_marker_color_r_;
-    Real line_marker_color_g_;
-    Real line_marker_color_b_;
-    Real line_marker_color_a_;
+    std::vector<Real> line_marker_color_rgba_;
 
     // Other variables
     Eigen::Matrix<Real,3,1> gravity_;

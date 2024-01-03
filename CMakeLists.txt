@@ -11,6 +11,12 @@ set(CMAKE_CXX_FLAGS "-std=c++11 -fpermissive ${CMAKE_CXX_FLAGS} -Wfatal-errors\ 
 # or
 # set(CMAKE_CXX_FLAGS "-O2 -O3 -std=c++11 -Wall")
 
+set(MSG_DEPS
+    geometry_msgs
+    std_msgs
+    #   visualization_msgs
+)
+
 option(BUILD_WITH_OPENMP "Use OpenMP" ON)
 
 ## Find catkin macros and libraries
@@ -25,6 +31,8 @@ find_package(catkin REQUIRED COMPONENTS
   tf2
   tf2_ros
   visualization_msgs
+  message_generation
+  ${MSG_DEPS}
 )
 
 ## System dependencies are found with CMake's conventions
@@ -42,6 +50,37 @@ if(BUILD_WITH_OPENMP)
         set(OpenMP_FLAGS ${OpenMP_CXX_FLAGS})  # or if you use C: ${OpenMP_C_FLAGS}
         set(OpenMP_LIBRARIES gomp)
     endif()
+endif()
+
+## Discregrid Integration
+# This section is required for generating 3D object file signed distance fields (SDF) using Discregrid.
+if(NOT DEFINED Discregrid_INCLUDE_DIR OR NOT DEFINED Discregrid_LIBRARIES)
+    # If Discregrid paths are not predefined, set up Discregrid as an external project.
+
+    include(ExternalProject)
+    ExternalProject_Add(
+        Ext_Discregrid
+        PREFIX "${CMAKE_BINARY_DIR}/extern/Discregrid"
+        GIT_REPOSITORY https://github.com/InteractiveComputerGraphics/Discregrid.git
+        # Consider specifying a specific tag or commit to ensure consistent builds.
+        GIT_TAG "master"  # Or replace with a specific commit like "4c27e1cc88be828c6ac5b8a05759ac7e01cf79e9"
+        INSTALL_DIR "${CMAKE_BINARY_DIR}/extern/Discregrid"
+        CMAKE_ARGS 
+            -DCMAKE_BUILD_TYPE:STRING=${CMAKE_BUILD_TYPE}
+            -DBUILD_AS_SHARED_LIBS=ON
+            -DBUILD_CMD_EXECUTABLE:BOOL=0
+            -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_BINARY_DIR}/extern/Discregrid
+            -DEIGEN3_INCLUDE_DIR:PATH=${EIGEN3_INCLUDE_DIR}
+            -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}
+    )
+
+    # Retrieve and cache the installation directory of Discregrid.
+    ExternalProject_Get_Property(Ext_Discregrid INSTALL_DIR)
+    set(Discregrid_INCLUDE_DIR "${INSTALL_DIR}/include" CACHE INTERNAL "Discregrid include directory")
+    set(Discregrid_LIBRARIES "${INSTALL_DIR}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}Discregrid${CMAKE_SHARED_LIBRARY_SUFFIX}" CACHE INTERNAL "Discregrid libraries")
+else()
+    # If Discregrid paths are predefined, use them.
+    message(STATUS "Using pre-defined Discregrid: ${Discregrid_INCLUDE_DIR}")
 endif()
 
 ## Uncomment this if the package has a setup.py. This macro ensures
@@ -73,12 +112,16 @@ endif()
 ##   * uncomment the generate_messages entry below
 ##   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
 
+set(MSG_FILES 
+    MinDistanceData.msg
+    MinDistanceDataArray.msg
+)
+
 ## Generate messages in the 'msg' folder
-# add_message_files(
-#   FILES
-#   Message1.msg
-#   Message2.msg
-# )
+add_message_files(
+  FILES
+  ${MSG_FILES}
+)
 
 ## Generate services in the 'srv' folder
 # add_service_files(
@@ -95,10 +138,10 @@ endif()
 # )
 
 ## Generate added messages and services with any dependencies listed here
-# generate_messages(
-#   DEPENDENCIES
-#   geometry_msgs#   std_msgs#   visualization_msgs
-# )
+generate_messages(
+  DEPENDENCIES
+  ${MSG_DEPS}
+)
 
 ###################################
 ## catkin specific configuration ##
@@ -112,9 +155,20 @@ endif()
 
 catkin_package(
  INCLUDE_DIRS include
- LIBRARIES dlo_simulator_stiff_rods # dlo, maybe?
- CATKIN_DEPENDS geometry_msgs roscpp rospy std_msgs tf tf2 tf2_ros visualization_msgs eigen_conversions 
- DEPENDS EIGEN3 # OpenMP, maybe?
+ LIBRARIES 
+    dlo_simulator_stiff_rods # dlo, maybe?
+ CATKIN_DEPENDS 
+    geometry_msgs 
+    roscpp 
+    rospy 
+    std_msgs 
+    tf tf2 tf2_ros 
+    visualization_msgs 
+    eigen_conversions 
+    message_runtime 
+    ${MSG_DEPS} 
+ DEPENDS 
+    EIGEN3 # OpenMP, maybe?
 )
 
 ###########
@@ -123,10 +177,14 @@ catkin_package(
 
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include ${catkin_INCLUDE_DIRS})
+include_directories(
+    ${CMAKE_CURRENT_SOURCE_DIR}/include 
+    ${catkin_INCLUDE_DIRS}
+)
 include_directories(${EIGEN3_INCLUDE_DIRS})
 include_directories(${Boost_INCLUDE_DIRS})
 include_directories(${OpenMP_INCLUDE_DIRS})
+include_directories(${Discregrid_INCLUDE_DIR})
 
 #
 # Build libs
@@ -136,18 +194,35 @@ include_directories(${OpenMP_INCLUDE_DIRS})
 # target_link_libraries(dlo ${catkin_LIBRARIES} ${Boost_LIBRARIES})
 # add_dependencies(dlo ${catkin_EXPORTED_TARGETS} ${${PROJECT_NAME}_EXPORTED_TARGETS})
 
-add_library(dlo_simulator_stiff_rods src/dlo_simulator.cpp src/dlo.cpp) 
-target_link_libraries(dlo_simulator_stiff_rods ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenMP_LIBRARIES})
-add_dependencies(dlo_simulator_stiff_rods ${catkin_EXPORTED_TARGETS} ${${PROJECT_NAME}_EXPORTED_TARGETS})
+add_library(dlo_simulator_stiff_rods 
+    src/dlo_simulator_stiff_rods/dlo_simulator.cpp 
+    src/dlo_simulator_stiff_rods/utilities/dlo.cpp
+    # src/dlo_simulator_stiff_rods/utilities/rigid_body_scene_loader.cpp 
+    # src/dlo_simulator_stiff_rods/utilities/collision_handler.cpp
+    # src/dlo_simulator_stiff_rods/utilities/BoundingSphereHierarchy.cpp
+)   
+target_link_libraries(dlo_simulator_stiff_rods 
+    ${catkin_LIBRARIES} 
+    ${Boost_LIBRARIES} 
+    ${OpenMP_LIBRARIES}
+    ${Discregrid_LIBRARIES}
+)
+add_dependencies(dlo_simulator_stiff_rods 
+    ${catkin_EXPORTED_TARGETS} 
+    ${${PROJECT_NAME}_EXPORTED_TARGETS}
+    Ext_Discregrid
+)
 
 #
 # Build nodes
 #
 
-add_executable(dlo_simulator_stiff_rods_node src/nodes/dlo_simulator_node.cpp)
-target_link_libraries(dlo_simulator_stiff_rods_node ${catkin_LIBRARIES} dlo_simulator_stiff_rods)
-# or
-# target_link_libraries(dlo_simulator_stiff_rods_node ${catkin_LIBRARIES} dlo_simulator_stiff_rods dlo) # if dlo lib needs to be uncommented above
+add_executable(dlo_simulator_stiff_rods_node 
+    src/nodes/dlo_simulator_node.cpp
+)
+target_link_libraries(dlo_simulator_stiff_rods_node 
+    ${catkin_LIBRARIES} 
+    dlo_simulator_stiff_rods)
 
 
 # #############
