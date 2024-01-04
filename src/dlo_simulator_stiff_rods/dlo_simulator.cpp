@@ -74,6 +74,10 @@ DloSimulator::~DloSimulator() {
     nh_local_.deleteParam("global_damp_coeff_w");
 
     nh_local_.deleteParam("initial_height");
+    nh_local_.deleteParam("dlo_translation");
+    nh_local_.deleteParam("dlo_rotationAxis");
+    nh_local_.deleteParam("dlo_rotationAngle");
+    nh_local_.deleteParam("dlo_scale");
 
     nh_local_.deleteParam("num_hang_corners");
     nh_local_.deleteParam("custom_static_particles");
@@ -150,9 +154,13 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
     nh_local_.param<Real>("global_damp_coeff_v", global_damp_coeff_v_, 0.0);
     nh_local_.param<Real>("global_damp_coeff_w", global_damp_coeff_w_, 0.0);
 
-    nh_local_.param<Real>("initial_height", initial_height_, 1.0);
+    nh_local_.param<Real>("initial_height", initial_height_, 0.0);
+    nh_local_.param("dlo_translation", dlo_translation_, std::vector<Real>({0.0, 0.0, 0.0}));
+    nh_local_.param("dlo_rotationAxis", dlo_rotationAxis_, std::vector<Real>({0.0, 0.0, 1.0}));
+    nh_local_.param<Real>("dlo_rotationAngle", dlo_rotationAngle_, 0.0);
+    nh_local_.param("dlo_scale", dlo_scale_, std::vector<Real>({1.0, 1.0, 1.0}));
 
-    nh_local_.param<int>("num_hang_corners", num_hang_corners_, 1);
+    nh_local_.param<int>("num_hang_corners", num_hang_corners_, 0);
     nh_local_.param("custom_static_particles", custom_static_particles_, std::vector<int>());
 
     nh_local_.param<std::string>("custom_static_particles_odom_topic_prefix", custom_static_particles_odom_topic_prefix_, std::string("custom_static_particles_odom_"));
@@ -211,6 +219,13 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
     pbd_object::MeshDLO dlo_mesh = DloSimulator::createMeshDLO(dlo_name, dlo_l_, initial_height_, dlo_num_segments_);
 
     // std::cout << "dlo_mesh.name: " << dlo_mesh.name << std::endl;
+
+    // Transform the created mesh
+    dlo_mesh = DloSimulator::transformMeshDLO(dlo_mesh,
+                                            dlo_translation_,
+                                            dlo_rotationAxis_,
+                                            dlo_rotationAngle_,
+                                            dlo_scale_); // scale is not used
 
     // Create dlo
     dlo_ = pbd_object::Dlo(dlo_mesh, 
@@ -334,7 +349,10 @@ void DloSimulator::reset(){
     nh_local_.setParam("reset",false);
 }
 
-pbd_object::MeshDLO DloSimulator::createMeshDLO(const std::string &name, const Real &dlo_l, const Real &dlo_z, const int &dlo_num_segments){
+pbd_object::MeshDLO DloSimulator::createMeshDLO(const std::string &name, 
+                                                const Real &dlo_l, 
+                                                const Real &dlo_z, 
+                                                const int &dlo_num_segments){
     // Assume: a dlo centered at the origin, and parallel with the y-axis, 
     // Assume: particle ids start from 0, and each id is a segment
     // Each segment has an orientation specified with a quaternion
@@ -370,14 +388,18 @@ pbd_object::MeshDLO DloSimulator::createMeshDLO(const std::string &name, const R
     }
 
     // Create quaterninons (orientations) 
-    Eigen::Matrix<Real, 1, 3> from(0,0,1); // dlo is expanded following z-axes
+    Eigen::Matrix<Real, 1, 3> from(0.0, 0.0, 1.0); // dlo is expanded following z-axes
     Eigen::Matrix<Real, 1, 3> to;
     Eigen::Quaternion<Real> dq;
 
     for (int j = 0; j < num_quaternions; j++) {
-        if (j < num_quaternions - 1) { // ie. until the last vertice position is used
+        // std::cout << "j: " << j << std::endl;
+        if (j < num_quaternions - 1) { // ie. until the last vertex position is used
             to = (vertices[j+1] - vertices[j]).normalized();
+            // std::cout << "to: " << to << std::endl;
+
             dq = Eigen::Quaternion<Real>::FromTwoVectors(from,to);
+            // std::cout << "dq: " << dq.coeffs() << std::endl;
 
             if (j == 0){
                 quaternions[j] = dq;
@@ -389,6 +411,7 @@ pbd_object::MeshDLO DloSimulator::createMeshDLO(const std::string &name, const R
             // Assume the last one has the same orientation with the previous one.
             quaternions[j] = quaternions[j-1]; 
         }
+        // std::cout << "quaternions[j]: " << quaternions[j].coeffs() << std::endl;
     }
 
     for (int i = 0; i < num_segments; i++) {
@@ -402,6 +425,43 @@ pbd_object::MeshDLO DloSimulator::createMeshDLO(const std::string &name, const R
     mesh.segment_lengths = segment_lengths; 
 
     return mesh;
+}
+
+pbd_object::MeshDLO DloSimulator::transformMeshDLO(const pbd_object::MeshDLO &mesh,
+                                                const std::vector<Real> &translation,
+                                                const std::vector<Real> &rotationAxis,
+                                                const Real &rotationAngle,
+                                                const std::vector<Real> &scale){
+    // Translates, rotates, and scales a given DLO mesh with Rotation given with Axis-Angle
+    // Note: scale is not used. 
+
+    // Check size of vectors
+    assert(translation.size() == 3);
+    assert(rotationAxis.size() == 3);
+    assert(scale.size() == 3);
+
+    // Prepare translation, rotation and scale matrices
+    Eigen::Matrix<Real,3,1> translationVector(translation[0], translation[1], translation[2]);
+    Eigen::AngleAxis<Real> rotationMatrix(rotationAngle, Eigen::Matrix<Real,3,1>(rotationAxis[0], rotationAxis[1], rotationAxis[2]));
+    Eigen::Matrix<Real,3,1> scaleVector(scale[0], scale[1], scale[2]);
+
+    // Create a copy of the input mesh
+    pbd_object::MeshDLO transformed_mesh = mesh;
+
+    // Convert angle-axis to quaternion
+    Eigen::Quaternion<Real> rotationQuaternion(rotationMatrix);
+
+    // Apply the transformation matrix to each vertex and quaternion in the mesh
+    for(int i = 0; i < transformed_mesh.vertices.size(); i++){
+        Eigen::Matrix<Real,3,1> &vertex = transformed_mesh.vertices[i];
+        vertex = rotationQuaternion * vertex + translationVector;
+
+        Eigen::Quaternion<Real> &quaternion = transformed_mesh.quaternions[i];
+        // Update the quaternion here with the new orientation
+        quaternion = rotationQuaternion * quaternion; // Apply rotation
+        std::cout << "quaternion[i]: " << quaternion.coeffs() << std::endl;
+    }
+    return transformed_mesh;
 }
 
 void DloSimulator::simulate(const ros::TimerEvent& e){

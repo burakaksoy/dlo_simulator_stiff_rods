@@ -44,7 +44,16 @@ public:
 private:
     // Functions ---------------------------------
     
-    pbd_object::MeshDLO createMeshDLO(const std::string &name, const Real &dlo_l, const Real &dlo_z, const int &dlo_num_segments);
+    pbd_object::MeshDLO createMeshDLO(const std::string &name, 
+                                    const Real &dlo_l, 
+                                    const Real &dlo_z, 
+                                    const int &dlo_num_segments);
+
+    pbd_object::MeshDLO transformMeshDLO(const pbd_object::MeshDLO &mesh,
+                                        const std::vector<Real> &translation,
+                                        const std::vector<Real> &rotationAxis,
+                                        const Real &rotationAngle,
+                                        const std::vector<Real> &scale);
 
     /*
     void readAttachedRobotForces();
@@ -139,6 +148,10 @@ private:
     Real global_damp_coeff_w_;
 
     Real initial_height_; // initial dlo height from ground (m)
+    std::vector<Real> dlo_translation_;
+    std::vector<Real> dlo_rotationAxis_;
+    Real dlo_rotationAngle_;
+    std::vector<Real> dlo_scale_;
 
     int num_hang_corners_; // num of corners to hang dlo from (options: 0,1,2)
     std::vector<int> custom_static_particles_; // particle ids to set as static

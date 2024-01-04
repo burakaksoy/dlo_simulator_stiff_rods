@@ -604,12 +604,12 @@ void Dlo::preSolve(const Real &dt, const Eigen::Matrix<Real,3,1> &gravity){
                 prev_pos_[i] = pos_[i];
                 pos_[i] += vel_.col(i)*dt;
 
-                // Prevent going below ground
-                Real z = pos_[i](2);
-                if (z < 0.){
-                    pos_[i] = prev_pos_[i] ;
-                    pos_[i](2) = 0.0;
-                }
+                // // Prevent going below ground
+                // Real z = pos_[i](2);
+                // if (z < 0.){
+                //     pos_[i] = prev_pos_[i] ;
+                //     pos_[i](2) = 0.0;
+                // }
             }
         }
 

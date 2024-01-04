@@ -23,14 +23,21 @@ use_zero_stretch_stiffness: true
 # and dlo_zero_stretch_stiffness parameter will be used as a scalar multiplier
 
 # Global artificial velocity damping coefficients. Defaults to 0.0. 
-global_damp_coeff_v: 5.9e-1 # 2.1e-4; // 0.9e-3
-global_damp_coeff_w: 0.9e-3 # 2.1e-4;
+global_damp_coeff_v: 0.0 # 5.9e-1 # 2.1e-4; // 0.9e-3
+global_damp_coeff_w: 0.0 # 0.9e-3 # 2.1e-4;
 
-initial_height: 2.50 # initial dlo height from ground (m)
+# DLO Initial Transformations (By Default, the dlo is laying in +y-axis to -y-axis direction centered at the origin)
+# initial_height: 0.0 # initial dlo height from ground (m) (Deprecated, use dlo_translation instead)
+dlo_translation: [0, 0, 1.0]
+dlo_rotationAxis: [0, 0, 1]
+dlo_rotationAngle: 1.5708 # 1.5708 # Radians
+# dlo_scale: [1, 1, 1] # NOT USED, use dlo_l and dlo_r parameters instead
 
-num_hang_corners: 1 # num of corners to hang dlo from (options: 0,1,2)
+# num_hang_corners: 0 # num of corners to hang dlo from (options: 0,1,2) 
+# Note that for some rotations specified this may NOT work.
+# (Deprecated, use custom_static_particles insted)
 
-custom_static_particles: [] # [0,27] # specify the particle (segment) ids to set as static
+custom_static_particles: [0,27] # [0,27] # specify the particle (segment) ids to set as static
 # Note: we also create an odom subscriber for each custom static particle to update their poses online.
 # Note: The specified ids must be in range of "dlo_num_segments" parameter.
 
@@ -45,7 +52,7 @@ use_direct_kkt_solver: false # parameter to select direct KKT/GS or GS (default:
 # due to the acylic requirement!!!!
 
 simulation_rate: 2333.3
-rendering_rate: 60.0 # Hz, frequency to publish the dlo vertices and edges to RVIZ visualization markers
+rendering_rate: 30.0 # Hz, frequency to publish the dlo vertices and edges to RVIZ visualization markers
 
 # wrench_pub_rate: 100.0 # Hz, frequency to publish the dlo forces at the attachment points
 

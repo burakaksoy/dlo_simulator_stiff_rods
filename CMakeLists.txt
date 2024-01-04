@@ -207,11 +207,17 @@ target_link_libraries(dlo_simulator_stiff_rods
     ${OpenMP_LIBRARIES}
     ${Discregrid_LIBRARIES}
 )
+# Standard dependencies
 add_dependencies(dlo_simulator_stiff_rods 
     ${catkin_EXPORTED_TARGETS} 
     ${${PROJECT_NAME}_EXPORTED_TARGETS}
-    Ext_Discregrid
 )
+
+# Add Ext_Discregrid as a dependency only if it exists
+if(TARGET Ext_Discregrid)
+    add_dependencies(dlo_simulator_stiff_rods Ext_Discregrid)
+endif()
+
 
 #
 # Build nodes
