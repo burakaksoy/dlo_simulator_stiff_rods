@@ -3,7 +3,7 @@
 	"RigidBodies": [
 		{
 			"id": 1,
-			"geometryFile": "/home/burak/catkin_ws_deformable/src/fabric_simulator/data/mesh/cube_5.obj",
+			"geometryFile": "/home/burak/catkin_ws_deformable/src/dlo_simulator_stiff_rods/data/mesh/cube_5.obj",
 			"isDynamic": 0, 
 			"density": 500, 
 			"translation": [0,0,-1.0],
