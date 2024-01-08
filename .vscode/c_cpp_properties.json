@@ -12,7 +12,6 @@
                 "/home/burak/catkin_ws_deformable/build/extern/**",
                 "/home/burak/catkin_ws_deformable/devel/include/**",
                 "/home/burak/catkin_ws_deformable/src/dlo_simulator_stiff_rods/include/**",
-                "/home/burak/catkin_ws_deformable/src/fabric_simulator/include/**",
                 "/home/burak/catkin_ws_deformable/src/rviz_ortho_view_controller/include/**"
             ],
             "name": "ROS",

@@ -485,7 +485,7 @@ void Dlo::setMasses(){
     */
 
     for (int i = 0; i < num_particles_; i++) {
-        Real l = mesh_.segment_lengths[i]; // segment length
+        const Real &l = mesh_.segment_lengths[i]; // segment length
         Real V = M_PI*(radius_*radius_)*l;  // segment volume
         Real mass = V * density_; // segment mass
 
@@ -781,35 +781,35 @@ void Dlo::solveStretchBendTwistConstraints(const Real &dt){
 			max_error_ = std::max(max_error_, std::abs(rhs[j]));
 		}
         
-        // compute G matrices (Equation (27))
+        // compute G matrices (Equation (27)), but first the bottom part of the matrix
         Eigen::Matrix<Real, 4, 3> G0, G1;
         // w component at index 3
         G0 <<
-            q0.w(), q0.z(), -q0.y(),
-            -q0.z(), q0.w(), q0.x(),
-            q0.y(), -q0.x(), q0.w(),
+             q0.w(),  q0.z(), -q0.y(),
+            -q0.z(),  q0.w(),  q0.x(),
+             q0.y(), -q0.x(),  q0.w(),
             -q0.x(), -q0.y(), -q0.z();
         G0 *= static_cast<Real>(0.5);
         // w component at index 3
         G1 <<
-            q1.w(), q1.z(), -q1.y(),
-            -q1.z(), q1.w(), q1.x(),
-            q1.y(), -q1.x(), q1.w(),
+             q1.w(),  q1.z(), -q1.y(),
+            -q1.z(),  q1.w(),  q1.x(),
+             q1.y(), -q1.x(),  q1.w(),
             -q1.x(), -q1.y(), -q1.z();
         G1 *= static_cast<Real>(0.5);
 
-        // compute bending and torsion Jacobians (Equation (10) and Equation (11))
+        // compute bending and torsion Jacobians (Equation (10) and Equation (11)), but first the right part of the matrix
 	    Eigen::Matrix<Real, 3, 4> jOmega0, jOmega1;
         // w component at index 3, Equation (11)
         jOmega0 <<
-            -q1.w(), -q1.z(), q1.y(), q1.x(),
-            q1.z(), -q1.w(), -q1.x(), q1.y(),
-            -q1.y(), q1.x(), -q1.w(), q1.z();
+            -q1.w(), -q1.z(),  q1.y(), q1.x(),
+             q1.z(), -q1.w(), -q1.x(), q1.y(),
+            -q1.y(),  q1.x(), -q1.w(), q1.z();
         // w component at index 3, Equation (10)
         jOmega1 <<
-            q0.w(), q0.z(), -q0.y(), -q0.x(),
-            -q0.z(), q0.w(), q0.x(), -q0.y(),
-            q0.y(), -q0.x(), q0.w(), -q0.z();
+             q0.w(),  q0.z(), -q0.y(), -q0.x(),
+            -q0.z(),  q0.w(),  q0.x(), -q0.y(),
+             q0.y(), -q0.x(),  q0.w(), -q0.z();
         jOmega0 *= static_cast<Real>(2.0) / averageSegmentLength;
         jOmega1 *= static_cast<Real>(2.0) / averageSegmentLength;
 
@@ -921,13 +921,13 @@ void Dlo::solveStretchBendTwistConstraints(const Real &dt){
             if (invMass0 != 0.)
             {
                 p0 += invMass0 * deltaLambdaStretch;
-                q0.coeffs() += G0 * (inertiaInverseW0 * ra_crossT * (-1 * deltaLambdaStretch) + MInvJT0 * deltaLambdaBendingAndTorsion);
+                q0.coeffs() += G0 * (inertiaInverseW0 * -ra_crossT * deltaLambdaStretch + MInvJT0 * deltaLambdaBendingAndTorsion);
                 q0.normalize();
             }
 
             if (invMass1 != 0.)
             {
-                p1 -= invMass1 * deltaLambdaStretch;
+                p1 += -invMass1 * deltaLambdaStretch;
                 q1.coeffs() += G1 * (inertiaInverseW1 * rb_crossT * deltaLambdaStretch + MInvJT1 * deltaLambdaBendingAndTorsion);
                 q1.normalize();
             }
@@ -1002,7 +1002,7 @@ void Dlo::postSolve(const Real &dt){
             // if (!inv_iner_[i].isZero(0)){
             if (inv_mass_[i]!= 0){
                 const Eigen::Quaternion<Real> relRot = (ori_[i] * prev_ori_[i].conjugate());
-                omega_.col(i) = 2.0*relRot.vec()/dt;
+                omega_.col(i) = (relRot.w() >= 0) ? (2.0*relRot.vec()/dt) : (-2.0*relRot.vec()/dt);
             }
         }
     }
@@ -1078,9 +1078,16 @@ void Dlo::updateAttachedPose(const int &id,
     ori_[id] = ori;
 }
 
+Eigen::Matrix2Xi *Dlo::getStretchBendTwistIdsPtr(){
+    return &stretchBendTwist_ids_;
+}
 
 std::vector<Eigen::Matrix<Real,3,1>> *Dlo::getPosPtr(){
     return &pos_;
+}
+
+std::vector<Eigen::Matrix<Real,3,1>> *Dlo::getPrevPosPtr(){
+    return &prev_pos_;
 }
 
 Eigen::Matrix<Real,3,Eigen::Dynamic> *Dlo::getVelPtr(){
@@ -1091,22 +1098,43 @@ Eigen::Matrix<Real,3,Eigen::Dynamic> *Dlo::getForPtr(){
     return &for_;
 }
 
-Eigen::Matrix2Xi *Dlo::getStretchBendTwistIdsPtr(){
-    return &stretchBendTwist_ids_;
+std::vector<Real> *Dlo::getInvMassPtr(){
+    return &inv_mass_;
 }
 
 std::vector<Eigen::Quaternion<Real>> *Dlo::getOriPtr(){
     return &ori_;
 }
 
+std::vector<Eigen::Quaternion<Real>> *Dlo::getPrevOriPtr(){
+    return &prev_ori_;
+}
+
+Eigen::Matrix<Real,3,Eigen::Dynamic> *Dlo::getAngVelPtr(){
+    return &omega_;
+}
+
+Eigen::Matrix<Real,3,Eigen::Dynamic> *Dlo::getTorPtr(){
+    return &tor_;
+}
+
+std::vector<Eigen::Matrix<Real,3,3>> *Dlo::getInvInerPtr(){
+    return &inv_iner_;
+}
+
+std::vector<Eigen::Matrix<Real,3,3>> *Dlo::getInerPtr(){
+    return &iner_;
+}
+
 std::vector<Real> *Dlo::getSegmentLengthsPtr(){
     return &mesh_.segment_lengths;
+}
+
+Real Dlo::getMaxError(){
+    return max_error_;
 }
 
 std::vector<int> *Dlo::getAttachedIdsPtr(){
     return &attached_ids_;
 }
 
-Real Dlo::getMaxError(){
-    return max_error_;
-}
