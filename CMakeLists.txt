@@ -197,9 +197,9 @@ include_directories(${Discregrid_INCLUDE_DIR})
 add_library(dlo_simulator_stiff_rods 
     src/dlo_simulator_stiff_rods/dlo_simulator.cpp 
     src/dlo_simulator_stiff_rods/utilities/dlo.cpp
-    # src/dlo_simulator_stiff_rods/utilities/rigid_body_scene_loader.cpp 
-    # src/dlo_simulator_stiff_rods/utilities/collision_handler.cpp
-    # src/dlo_simulator_stiff_rods/utilities/BoundingSphereHierarchy.cpp
+    src/dlo_simulator_stiff_rods/utilities/rigid_body_scene_loader.cpp 
+    src/dlo_simulator_stiff_rods/utilities/collision_handler.cpp
+    src/dlo_simulator_stiff_rods/utilities/BoundingSphereHierarchy.cpp
 )   
 target_link_libraries(dlo_simulator_stiff_rods 
     ${catkin_LIBRARIES} 
