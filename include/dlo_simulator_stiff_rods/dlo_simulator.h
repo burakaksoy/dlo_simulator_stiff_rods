@@ -220,8 +220,6 @@ private:
 
     std::string custom_static_particles_odom_topic_prefix_;
 
-    bool use_direct_kkt_solver_;
-
     Real simulation_rate_;
     Real rendering_rate_;
     /*

@@ -95,8 +95,6 @@ DloSimulator::~DloSimulator() {
 
     nh_local_.deleteParam("custom_static_particles_odom_topic_prefix");
 
-    nh_local_.deleteParam("use_direct_kkt_solver");
-
     nh_local_.deleteParam("simulation_rate");
     nh_local_.deleteParam("rendering_rate");
     /*
@@ -208,8 +206,6 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
 
     nh_local_.param<std::string>("custom_static_particles_odom_topic_prefix", custom_static_particles_odom_topic_prefix_, std::string("custom_static_particles_odom_"));
 
-    nh_local_.param<bool>("use_direct_kkt_solver", use_direct_kkt_solver_, false);
-    
     nh_local_.param<Real>("simulation_rate", simulation_rate_, 90.0); 
     nh_local_.param<Real>("rendering_rate", rendering_rate_, 30.0);
     /*
@@ -300,7 +296,6 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
                            dlo_young_modulus_, 
                            dlo_torsion_modulus_, 
                            dlo_density_,dlo_r_,
-                           use_direct_kkt_solver_,
                            use_zero_stretch_stiffness_,
                            global_damp_coeff_v_,
                            global_damp_coeff_w_);

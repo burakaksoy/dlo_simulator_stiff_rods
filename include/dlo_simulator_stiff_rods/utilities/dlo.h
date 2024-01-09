@@ -105,7 +105,6 @@ public:
         const Real &torsion_modulus, 
         const Real &density,
         const Real &radius,
-        const bool &use_direct_kkt_solver,
         const bool &use_zero_stretch_stiffness,
         const Real &global_damp_coeff_v,
         const Real &global_damp_coeff_w);
@@ -208,37 +207,16 @@ private:
     Real young_modulus_;
     Real torsion_modulus_;
 
-
-    // -----------------------------------------------------------------
-    // BEGIN: Parameters and functions for Tree structured linear time direct solver
-    Node* root_;
-    std::list<Node*> * forward_; // from leave to the root
-    std::list<Node*> * backward_; // from root to the leaves
-
     Real max_error_;
 
-    void initTree();
-    void initNodes();
-    void initSegmentNode(Node *n);
-
-    void orderMatrixH(Node *n);
-
-    void factor(const Eigen::Matrix<Real,3,1> &stretch_compliance,
-                const Eigen::Matrix<Real,3,1> &bending_and_torsion_compliance);
-
-    void solver();
-
-    bool use_direct_kkt_solver_;
     bool use_zero_stretch_stiffness_;
 
     Real global_damp_coeff_v_; 
     Real global_damp_coeff_w_;
-    // END: Parameters and functions for Tree structured linear time direct solver
-    // -----------------------------------------------------------------
+    
 
     std::vector<int> attached_ids_; // ids of robot attached particles
     // int grab_id_;
-    // Real grab_inv_mass_;
 };
 
 } // namespace pbd_object

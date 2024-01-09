@@ -50,10 +50,6 @@ custom_static_particles_odom_topic_prefix: "custom_static_particles_odom_"
 # and custom_static_particles: [0,27], we will have two odom subscriber topics named:
 # "custom_static_particles_odom_0" and "custom_static_particles_odom_27"
 
-use_direct_kkt_solver: false # parameter to select direct KKT/GS or GS (default: false)
-# KKT/GS is more efficient however cannot handle more than one fixed points 
-# due to the acylic requirement!!!!
-
 simulation_rate: 1000.0
 rendering_rate: 30.0 # Hz, frequency to publish the dlo vertices and edges to RVIZ visualization markers
 
