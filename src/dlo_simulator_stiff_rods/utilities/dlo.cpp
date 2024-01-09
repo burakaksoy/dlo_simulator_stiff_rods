@@ -187,61 +187,7 @@ void Dlo::setMasses(){
     std::cout << "Total dlo mass:\n" << inv_mass_eigen.cwiseInverse().sum() << " kg." << std::endl;
 }
 
-void Dlo::hangFromCorners(const int &num_corners){
-    // if num_corners = 0: Do not fix any corners, free fall
-    // if num_corners = 1: Fix from 1 corners
-    // if num_corners = 2: Fix from 2 (all) corners
-    // if num_corners = else: Fix all corners
 
-    Real min_x = std::numeric_limits<Real>::infinity();
-    Real max_x = -std::numeric_limits<Real>::infinity();
-    Real min_y = std::numeric_limits<Real>::infinity();
-    Real max_y = -std::numeric_limits<Real>::infinity();
-
-    for (int i = 0; i < num_particles_; i++) {
-        min_x = std::min(min_x, pos_[i](0));
-        max_x = std::max(max_x, pos_[i](0));
-        min_y = std::min(min_y, pos_[i](1));
-        max_y = std::max(max_y, pos_[i](1));
-    }
-
-    Real eps = 0.0001;
-
-    for (int i = 0; i < num_particles_; i++) {
-        Real x = pos_[i](0);
-        Real y = pos_[i](1);
-
-        switch(num_corners) {
-            case 0:
-                std::cout << "Did not virtually hang from any corners." << std::endl;
-                return;
-                // break;
-            case 1:
-                if (y > max_y - eps && x > max_x - eps) {
-                    std::cout << "id: " << i << " is virtually hang as corner 1." << std::endl;
-                    inv_mass_[i] = 0.0;
-                    inv_iner_[i].setZero();
-                    attached_ids_.push_back(i); // add fixed particle id to the attached_ids_ vector
-                }
-                break;
-            case 2:
-                if ((y < min_y + eps || y > max_y - eps  ) && (x < min_x + eps || x > max_x - eps)) {
-                    std::cout << "id: " << i << " is virtually hang as corners 1 or 2." << std::endl;
-                    inv_mass_[i] = 0.0;
-                    inv_iner_[i].setZero();
-                    attached_ids_.push_back(i); // add fixed particle id to the attached_ids_ vector
-                }
-                break;
-            default:
-                if ((y < min_y + eps || y > max_y - eps  ) && (x < min_x + eps || x > max_x - eps)) {
-                    std::cout << "id: " << i << " is virtually hang as corners 1 or 2." << std::endl;
-                    inv_mass_[i] = 0.0;
-                    inv_iner_[i].setZero();
-                    attached_ids_.push_back(i); // add fixed particle id to the attached_ids_ vector
-                }
-                break;
-        }
-    }
 }
 
 void Dlo::setStaticParticles(const std::vector<int> &particles){

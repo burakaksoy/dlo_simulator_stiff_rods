@@ -36,10 +36,6 @@ dlo_rotationAxis: [0, 0, 1] # [1, 0, 0]
 dlo_rotationAngle: 1.5708 # 1.508 # 1.5708 # Radians
 # dlo_scale: [1, 1, 1] # NOT USED, use dlo_l and dlo_r parameters instead
 
-# num_hang_corners: 0 # num of corners to hang dlo from (options: 0,1,2) 
-# Note that for some rotations specified this may NOT work.
-# (Deprecated, use custom_static_particles insted)
-
 custom_static_particles: [0] # [0,27] # specify the particle (segment) ids to set as static
 # Note: we also create an odom subscriber for each custom static particle to update their poses online.
 # Note: The specified ids must be in range of "dlo_num_segments" parameter.

@@ -300,9 +300,6 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
                            global_damp_coeff_v_,
                            global_damp_coeff_w_);
 
-    // Hang dlo from corners
-    dlo_.hangFromCorners(num_hang_corners_);
-
     // Set static particles
     dlo_.setStaticParticles(custom_static_particles_);
 
@@ -891,7 +888,7 @@ void DloSimulator::simulate(const ros::TimerEvent& e){
     }
     // -------------------------------
 
-    // // To debug force readings from hanged corners (use inly when robots are not attached)
+    // // To debug force readings from hanged corners (use only when robots are not attached)
     // std::vector<int> *attached_ids_ptr = dlo_.getAttachedIdsPtr();
     // Eigen::Matrix<Real,Eigen::Dynamic,3> *for_ptr = dlo_.getForPtr();
     // int id = (*attached_ids_ptr)[0]; // First attached id
