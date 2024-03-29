@@ -1,0 +1,737 @@
+#!/usr/bin/env python3
+
+import sys
+
+import rospy
+
+import numpy as np
+import time
+
+import PyQt5.QtWidgets as qt_widgets
+import PyQt5.QtCore as qt_core
+from PyQt5.QtCore import Qt
+
+from geometry_msgs.msg import Twist, Point, Quaternion, Pose
+from nav_msgs.msg import Odometry
+from visualization_msgs.msg import Marker
+
+from dlo_simulator_stiff_rods.msg import SegmentStateArray
+from dlo_simulator_stiff_rods.msg import ChangeParticleDynamicity
+
+from dlo_simulator_stiff_rods.srv import SetParticleDynamicity, SetParticleDynamicityRequest
+
+from std_srvs.srv import SetBool, SetBoolRequest
+from std_srvs.srv import Empty, EmptyResponse
+
+import math
+import tf.transformations as transformations
+
+"""
+Author: Burak Aksoy
+
+The test_gui_node simulates the publishing of odometry and/or twist data for 
+a set of particles within a ROS network. Utilizing the PyQt5 library, the node
+provides a GUI interface which displays a series of buttons representing each 
+particle, allowing the user to manually toggle the publishing state of 
+individual particles.
+"""
+
+# Velocity commands will only be considered if they are spaced closer than MAX_TIMESTEP
+MAX_TIMESTEP = 0.04 # Set it to ~ twice of pub rate odom
+
+class TestGUI(qt_widgets.QWidget):
+    def __init__(self):
+        super(TestGUI, self).__init__()
+        self.shutdown_timer = qt_core.QTimer()
+
+        self.pub_rate_odom = rospy.get_param("~pub_rate_odom", 50)
+
+        self.initial_values_set = False  # Initialization state variable
+
+        self.particles = [] # All particles that is union of controllable and uncontrollable particles
+        self.binded_particles = [] # particles that are uncontrollable and binded to the leader frame,
+        # (e.g human hand held points when the neck joint is the leader)
+
+        self.odom_topic_prefix = None
+        self.cmd_vel_topic_prefix = None
+        self.odom_topic_leader = None
+        # simulator_node_name = "/dlo_simulator_stiff_rods_node"
+        simulator_node_name = ""
+        while (not self.particles):
+            try:
+                self.particles = rospy.get_param(simulator_node_name + "/custom_static_particles")
+                self.odom_topic_prefix = rospy.get_param(simulator_node_name + "/custom_static_particles_odom_topic_prefix")
+                self.cmd_vel_topic_prefix = rospy.get_param(simulator_node_name + "/custom_static_particles_cmd_vel_topic_prefix")
+                self.odom_topic_leader = rospy.get_param("/odom_topic_leader", "/odom_leader")
+            except:
+                rospy.logwarn("No particles obtained from ROS parameters. GUI will be empty.")
+                time.sleep(0.5)
+
+        self.binded_particles = list(set(self.particles))
+
+        self.odom_publishers = {}
+        self.info_binded_pose_publishers = {}
+
+        self.particle_positions = {}
+        self.particle_orientations = {}
+        self.particle_twists = {}
+
+        self.initialize_leader_position()
+
+        self.binded_relative_poses = {} # stores Pose() msg of ROS geometry_msgs (Pose.position and Pose.orientation)
+
+        self.createUI()
+        
+        self.spacenav_twist = Twist() # set it to an empty twist message
+        self.last_spacenav_twist_time = rospy.Time.now() # for timestamping of the last twist msg
+        # self.spacenav_twist_wait_timeout = rospy.Duration(2.0*(1.0/self.pub_rate_odom)) # timeout duration to wait twist msg before zeroing in seconds
+        self.spacenav_twist_wait_timeout = rospy.Duration(1.0) # timeout duration to wait twist msg before zeroing in seconds
+
+
+        self.sub_twist = rospy.Subscriber("/spacenav/twist", Twist, self.spacenav_twist_callback, queue_size=1)
+        self.sub_state_array = rospy.Subscriber("/dlo_state", SegmentStateArray, self.state_array_callback, queue_size=1)
+
+        self.pub_change_dynamicity = rospy.Publisher("/change_particle_dynamicity", ChangeParticleDynamicity , queue_size=1)
+
+        self.last_timestep_requests = {}
+
+        self.odom_pub_timer = rospy.Timer(rospy.Duration(1. / self.pub_rate_odom), self.odom_pub_timer_callback)
+        
+
+    def createUI(self):
+        self.layout = qt_widgets.QVBoxLayout(self)
+
+        self.buttons_manual = {} # To enable/disable manual control
+        self.start_controller_buttons = {} # for leader particle only, (Yes, there is only one leader always but for the sake of generality this is a dictionary)
+        self.bind_to_leader_buttons = {} # for binded particles
+
+        self.text_inputs_pos = {} # to manually set x y z positions of the particles
+        self.text_inputs_ori = {} # to manually set x y z orientations of the particles (Euler RPY, degree input)
+        
+        # Combine the lists with boundary markers
+        combined_particles = (["leader"] + ["_boundary_marker_"] +
+                            self.binded_particles + ["_boundary_marker_"])
+
+        # Create rows for the (custom static) particles and the leader
+        for particle in combined_particles:
+            # insert a horizontal line between each list (["leader"], self.binded_particles)
+            if particle == "_boundary_marker_":
+                # Add a horizontal line here
+                h_line = qt_widgets.QFrame()
+                h_line.setFrameShape(qt_widgets.QFrame.HLine)
+                h_line.setFrameShadow(qt_widgets.QFrame.Sunken)
+                self.layout.addWidget(h_line)  # Assuming 'self.layout' is your main layout
+                continue
+
+            # Create QHBoxLayout for each row
+            row_layout = qt_widgets.QHBoxLayout()
+
+            manual_control_button = qt_widgets.QPushButton()
+            manual_control_button.setText("Manually Control " + str(particle))
+            manual_control_button.setCheckable(True)  # Enables toggle behavior
+            manual_control_button.setChecked(False)
+            manual_control_button.clicked.connect(lambda _, p=particle: self.manual_control_button_pressed_cb(p))
+            row_layout.addWidget(manual_control_button) # Add button to row layout
+
+            self.buttons_manual[particle] = manual_control_button
+
+            # ------------------------------------------------
+            # Add a separator vertical line here
+            separator = qt_widgets.QFrame()
+            separator.setFrameShape(qt_widgets.QFrame.VLine)
+            separator.setFrameShadow(qt_widgets.QFrame.Sunken)
+            row_layout.addWidget(separator)
+            # ------------------------------------------------
+
+            # Add button to get current pose to GUI for easy set position and orientation operations
+            get_pose_button = qt_widgets.QPushButton()
+            get_pose_button.setText("Get Pose")
+            get_pose_button.clicked.connect(lambda _, p=particle: self.get_pose_button_pressed_cb(p))
+            row_layout.addWidget(get_pose_button)
+
+            # ------------------------------------------------
+            # Add a separator vertical line here
+            separator = qt_widgets.QFrame()
+            separator.setFrameShape(qt_widgets.QFrame.VLine)
+            separator.setFrameShadow(qt_widgets.QFrame.Sunken)
+            row_layout.addWidget(separator)
+            # ------------------------------------------------
+
+            # Create LineEdits and Add to row layout
+            self.text_inputs_pos[particle] = {}
+            for axis in ['x', 'y', 'z']:
+                label = qt_widgets.QLabel(axis + ':')
+                line_edit = qt_widgets.QLineEdit()
+
+                if axis == 'x':
+                    line_edit.setText(str(0.0))
+                elif axis == 'y':
+                    line_edit.setText(str(0.0))
+                elif axis == 'z':
+                    line_edit.setText(str(0.0))
+                
+                row_layout.addWidget(label)
+                row_layout.addWidget(line_edit)
+                self.text_inputs_pos[particle][axis] = line_edit
+            
+            
+            # Create Set Position button
+            set_pos_button = qt_widgets.QPushButton()
+            set_pos_button.setText("Set Position")
+            set_pos_button.clicked.connect(lambda _, p=particle: self.set_position_cb(p))
+            row_layout.addWidget(set_pos_button)
+
+            # ------------------------------------------------
+            # Add a separator vertical line here
+            separator = qt_widgets.QFrame()
+            separator.setFrameShape(qt_widgets.QFrame.VLine)
+            separator.setFrameShadow(qt_widgets.QFrame.Sunken)
+            row_layout.addWidget(separator)
+            # ------------------------------------------------
+
+            # Add Set orientation button text inputs
+            self.text_inputs_ori[particle] = {}
+            for axis in ['x', 'y', 'z']:
+                label = qt_widgets.QLabel(axis + ':')
+                line_edit = qt_widgets.QLineEdit()
+
+                if axis == 'x':
+                    line_edit.setText(str(0.0))
+                elif axis == 'y':
+                    line_edit.setText(str(0.0))
+                elif axis == 'z':
+                    line_edit.setText(str(0.0))
+                
+                row_layout.addWidget(label)
+                row_layout.addWidget(line_edit)
+                self.text_inputs_ori[particle][axis] = line_edit
+
+            # Create Set Orientation button
+            set_ori_button = qt_widgets.QPushButton()
+            set_ori_button.setText("Set Orientation")
+            set_ori_button.clicked.connect(lambda _, p=particle: self.set_orientation_cb(p))
+            row_layout.addWidget(set_ori_button)
+
+            # ------------------------------------------------
+            # Add a separator vertical line here
+            separator = qt_widgets.QFrame()
+            separator.setFrameShape(qt_widgets.QFrame.VLine)
+            separator.setFrameShadow(qt_widgets.QFrame.Sunken)
+            row_layout.addWidget(separator)
+            # ------------------------------------------------
+
+
+            # Create Pause Controller Button or Enable Disable Particle Button
+            if particle == "leader":
+                start_controller_button = qt_widgets.QPushButton()
+                start_controller_button.setText("Start Controller")
+                # start_controller_button.clicked.connect(lambda _, p=particle: self.start_controller_button_cb(p))
+                # start_controller_button.setCheckable(True) # Set the pause button as checkable
+                start_controller_button.setEnabled(False)  # Disable the button
+                row_layout.addWidget(start_controller_button)
+
+                self.start_controller_buttons[particle] = start_controller_button            
+            if particle in self.binded_particles:
+                bind_to_leader_button = qt_widgets.QPushButton()
+                bind_to_leader_button.setText("Bind to Leader")
+                bind_to_leader_button.clicked.connect(lambda _, p=particle: self.bind_to_leader_button_cb(p))
+                bind_to_leader_button.setCheckable(True) # Set the pause button as checkable
+
+                row_layout.addWidget(bind_to_leader_button)
+
+                self.bind_to_leader_buttons[particle] = bind_to_leader_button            
+
+
+            # Create Reset DLO positions button
+            if particle in self.binded_particles: 
+                reset_button = qt_widgets.QPushButton()
+                reset_button.setText("Reset Controller Position")
+                reset_button.setEnabled(False)  # Disable the button
+                row_layout.addWidget(reset_button)
+            else: # Leader particle
+                # Send leader particle to the centroid of the particles
+                send_to_centroid_button = qt_widgets.QPushButton()
+                send_to_centroid_button.setText("Center Leader Frame")
+                send_to_centroid_button.clicked.connect(lambda _, p=particle: self.send_to_centroid_cb(p))
+                row_layout.addWidget(send_to_centroid_button)
+
+            # Create Make Dynamic Button
+            if particle in self.binded_particles: 
+                make_dynamic_button = qt_widgets.QPushButton()
+                make_dynamic_button.setText("Make Dynamic")
+                make_dynamic_button.clicked.connect(lambda _, p=particle: self.change_dynamicity_cb(p,True))
+                row_layout.addWidget(make_dynamic_button)            
+            
+            # Create Make Static Button
+            if particle in self.binded_particles: 
+                make_static_button = qt_widgets.QPushButton()
+                make_static_button.setText("Make Static")
+                make_static_button.clicked.connect(lambda _, p=particle: self.change_dynamicity_cb(p,False))
+                row_layout.addWidget(make_static_button)            
+
+            # Add row layout to the main layout
+            self.layout.addLayout(row_layout)
+            
+            if particle == "leader":
+                self.odom_publishers[particle] = rospy.Publisher(self.odom_topic_leader, Odometry, queue_size=1)
+            else:
+                self.odom_publishers[particle] = rospy.Publisher(self.odom_topic_prefix + str(particle), Odometry, queue_size=1)
+
+            if particle in self.binded_particles:
+                self.info_binded_pose_publishers[particle] = rospy.Publisher( "fake_odom_publisher_gui_info_"+str(particle)+"_target_pose", Marker, queue_size=1)
+
+        self.setLayout(self.layout)
+
+        self.shutdown_timer.timeout.connect(self.check_shutdown)
+        self.shutdown_timer.start(1000)  # Timer triggers every 1000 ms (1 second)
+
+    def format_number(self,num, digits=4):
+        # When digits = 4, look at the affect of the function
+        # print(format_number(5))         # Output: '5.0'
+        # print(format_number(5.0))       # Output: '5.0'
+        # print(format_number(5.12345))   # Output: '5.1235'
+        # print(format_number(5.1000))    # Output: '5.1'
+        # print(format_number(123.456789))# Output: '123.4568'
+
+        rounded_num = round(float(num), digits)  # Ensure num is treated as a float
+        # Check if the rounded number is an integer
+        if rounded_num.is_integer():
+            return f'{int(rounded_num)}.0'
+        else:
+            return f'{rounded_num:.4f}'.rstrip('0').rstrip('.')
+
+    def get_pose_button_pressed_cb(self, particle):
+        """
+        Gets the current pose of the particle 
+        and fills the text_inputs for pos and ori accordingly
+        """
+
+        # Check if the particle pose is set
+        if (particle in self.particle_positions) and (particle in self.particle_orientations):
+            # Get Current Pose of the particle in world frame
+            pos = self.particle_positions[particle] # Point() msg of ROS geometry_msgs
+            ori = self.particle_orientations[particle] # Quaternion() msg of ROS geometry_msgs
+
+            # Fill the position text inputs with the current position
+            self.text_inputs_pos[particle]['x'].setText(self.format_number(pos.x,digits=3)) 
+            self.text_inputs_pos[particle]['y'].setText(self.format_number(pos.y,digits=3)) 
+            self.text_inputs_pos[particle]['z'].setText(self.format_number(pos.z,digits=3)) 
+
+            # Convert quaternion orientation to RPY (Roll-pitch-yaw) Euler Angles (degrees)
+            rpy = np.rad2deg(transformations.euler_from_quaternion([ori.x,ori.y,ori.z,ori.w]))
+
+            # Fill the orientation text  inputs with the current RPY orientation
+            self.text_inputs_ori[particle]['x'].setText(self.format_number(rpy[0],digits=1))
+            self.text_inputs_ori[particle]['y'].setText(self.format_number(rpy[1],digits=1))
+            self.text_inputs_ori[particle]['z'].setText(self.format_number(rpy[2],digits=1))
+        else:
+            rospy.logwarn(f"Key '{particle}' not found in the particle_positions and particle_orientations dictionaries.")
+
+    def set_position_cb(self, particle):
+        pose = Pose()
+        pose.position.x = float(self.text_inputs_pos[particle]['x'].text())
+        pose.position.y = float(self.text_inputs_pos[particle]['y'].text())
+        pose.position.z = float(self.text_inputs_pos[particle]['z'].text())
+
+        # Keep the same orientation
+        pose.orientation = self.particle_orientations[particle]
+
+        # if particle == "leader":
+        self.particle_positions[particle] = pose.position
+        self.particle_orientations[particle] = pose.orientation
+
+        # Prepare Odometry message
+        odom = Odometry()
+        odom.header.stamp = rospy.Time.now()
+        odom.header.frame_id = "map" 
+        odom.pose.pose = pose
+
+        self.odom_publishers[particle].publish(odom)
+
+    def set_orientation_cb(self,particle):
+        pose = Pose()
+
+        # Keep the same position
+        pose.position = self.particle_positions[particle]
+
+        # Update the orientation with RPY degree input
+        th_x = np.deg2rad(float(self.text_inputs_ori[particle]['x'].text())) # rad
+        th_y = np.deg2rad(float(self.text_inputs_ori[particle]['y'].text())) # rad
+        th_z = np.deg2rad(float(self.text_inputs_ori[particle]['z'].text())) # rad
+
+        q = transformations.quaternion_from_euler(th_x, th_y,th_z)
+        pose.orientation.x = q[0]
+        pose.orientation.y = q[1]
+        pose.orientation.z = q[2]
+        pose.orientation.w = q[3]
+
+        # if particle == "leader":
+        self.particle_positions[particle] = pose.position
+        self.particle_orientations[particle] = pose.orientation
+
+        # Prepare Odometry message
+        odom = Odometry()
+        odom.header.stamp = rospy.Time.now()
+        odom.header.frame_id = "map" 
+        odom.pose.pose = pose
+
+        self.odom_publishers[particle].publish(odom)
+
+    def reset_position_cb(self, particle):
+        # Call reset positions service
+        service_name = '/dlo_velocity_controller/reset_positions' 
+        rospy.wait_for_service(service_name, timeout=2.0)
+        try:
+            reset_positions_service = rospy.ServiceProxy(service_name, ResetParticlePosition)
+            # Create a request to the service
+            request = ResetParticlePositionRequest()
+            request.particle_id = particle
+
+            reset_positions_service(request)
+        except rospy.ServiceException as e:
+            print("Service call failed: %s"%e)
+
+    def bind_to_leader_button_cb(self, particle):
+        if self.bind_to_leader_buttons[particle].isChecked():
+            # Button is currently pressed, no need to set it to False
+            print(f"Button for binding particle {particle} to leader is now pressed.")
+
+            # Store binded particle's current pose relative to the leader frame
+            if (particle in self.particle_positions) and ("leader" in self.particle_positions):                
+                # Current Pose of the leader in world frame
+                pos_leader = self.particle_positions["leader"] # Point() msg of ROS geometry_msgs
+                ori_leader = self.particle_orientations["leader"] # Quaternion() msg of ROS geometry_msgs
+
+                # Current Pose of the binded particle in world frame
+                pos_binded_world = self.particle_positions[particle] # Point() msg of ROS geometry_msgs
+                ori_binded_world = self.particle_orientations[particle] # Quaternion() msg of ROS geometry_msgs
+
+                # Convert quaternions to rotation matrices
+                rotation_matrix_leader = transformations.quaternion_matrix([ori_leader.x, ori_leader.y, ori_leader.z, ori_leader.w])
+
+                # Calculate the relative position of the binded particle in the leader's frame
+                relative_pos = np.dot(rotation_matrix_leader.T, np.array([pos_binded_world.x - pos_leader.x, pos_binded_world.y - pos_leader.y, pos_binded_world.z - pos_leader.z, 1]))[:3]
+
+                # Calculate the relative orientation of the binded particle in the leader's frame
+                inv_ori_leader = transformations.quaternion_inverse([ori_leader.x, ori_leader.y, ori_leader.z, ori_leader.w])
+                relative_ori = transformations.quaternion_multiply(inv_ori_leader, [ori_binded_world.x, ori_binded_world.y, ori_binded_world.z, ori_binded_world.w])
+
+                # Store the relative position and orientation
+                pose = Pose()
+                pose.position = Point(*relative_pos)
+                pose.orientation = Quaternion(*relative_ori)
+                self.binded_relative_poses[particle] = pose # stores Pose() msg of ROS geometry_msgs (Pose.position and Pose.orientation)
+
+                # Make the manual control button unpressed
+                self.buttons_manual[particle].setChecked(False)
+            else:
+                rospy.logwarn("Initial pose values of the object particles or leader is not yet set")
+                self.bind_to_leader_buttons[particle].setChecked(False)
+
+        else:
+            # Button is currently not pressed, no need to set it to True
+            print(f"Button for binding particle {particle} to leader is now NOT pressed.")   
+
+            # Unbind particle from leader by deleting the relative pose from the dictionary
+            if particle in self.binded_relative_poses:
+                del self.binded_relative_poses[particle]
+            else:
+                rospy.logerr(f"Key '{particle}' not found in the binded_relative_poses dictionary.")
+
+    def send_to_centroid_cb(self,particle_to_send):
+        # Calculate the centroid of the other particles
+        centroid_pos = np.zeros(3)
+        n_particle = 0 # number of particles to calculate the centroid
+        for particle in ["leader"] + self.particles:
+            if particle != particle_to_send:
+                # Check if the particle pose is set
+                if (particle in self.particle_positions) and (particle in self.particle_orientations):
+                    # Get Current Pose of the particle in world frame
+                    pos = self.particle_positions[particle] # Point() msg of ROS geometry_msgs
+                    # ori = self.particle_orientations[particle] # Quaternion() msg of ROS geometry_msgs
+
+                    centroid_pos = centroid_pos + np.array([pos.x,pos.y,pos.z])
+                    n_particle = n_particle + 1
+                else:
+                    rospy.logwarn(f"Key '{particle}' not found in the particle_positions and particle_orientations dictionaries.")
+
+        # Send to centrod
+        if n_particle > 0:
+            centroid_pos = centroid_pos/n_particle # Take the mean
+
+            pose = Pose()
+            pose.position.x = centroid_pos[0]
+            pose.position.y = centroid_pos[1]
+            pose.position.z = centroid_pos[2]
+
+            # Keep the same orientation
+            pose.orientation = self.particle_orientations[particle_to_send]
+
+            if particle_to_send == "leader":
+                self.particle_positions[particle_to_send] = pose.position
+                self.particle_orientations[particle_to_send] = pose.orientation
+
+            # Prepare Odometry message
+            odom = Odometry()
+            odom.header.stamp = rospy.Time.now()
+            odom.header.frame_id = "map" 
+            odom.pose.pose = pose
+
+            self.odom_publishers[particle_to_send].publish(odom)
+        else:
+            rospy.logwarn("There is no particle to calculate the centroid.")
+
+    def odom_pub_timer_callback(self,event):
+        # Reset spacenav_twist to zero if it's been long time since the last arrived
+        self.check_spacenav_twist_wait_timeout()
+
+        # Handle manual control of each particle and the leader
+        for particle in ["leader"] + self.particles:
+            # Do not proceed with the "non-leader" particles until the initial values have been set
+            if (particle != "leader") and not((particle in self.particle_positions) and ("leader" in self.particle_positions)):
+                continue
+
+            if self.buttons_manual[particle].isChecked():
+                dt = self.get_timestep(particle)   
+                # dt = 0.01
+                # dt = 1. / self.pub_rate_odom
+
+                # simple time step integration using Twist data
+                pose = Pose()
+                pose.position.x = self.particle_positions[particle].x + dt*self.spacenav_twist.linear.x
+                pose.position.y = self.particle_positions[particle].y + dt*self.spacenav_twist.linear.y
+                pose.position.z = self.particle_positions[particle].z + dt*self.spacenav_twist.linear.z
+
+                # # --------------------------------------------------------------
+                # # To update the orientation with the twist message
+                # Calculate the magnitude of the angular velocity vector
+                omega_magnitude = math.sqrt(self.spacenav_twist.angular.x**2 + 
+                                            self.spacenav_twist.angular.y**2 + 
+                                            self.spacenav_twist.angular.z**2)
+                
+                # print("omega_magnitude: " + str(omega_magnitude))
+
+                pose.orientation = self.particle_orientations[particle]
+
+                if omega_magnitude > 1e-9:  # Avoid division by zero
+                    # Create the delta quaternion based on world frame twist
+                    delta_quat = transformations.quaternion_about_axis(omega_magnitude * dt, [
+                        self.spacenav_twist.angular.x / omega_magnitude,
+                        self.spacenav_twist.angular.y / omega_magnitude,
+                        self.spacenav_twist.angular.z / omega_magnitude
+                    ])
+                    
+                    # Update the pose's orientation by multiplying delta quaternion with current orientation 
+                    # Note the order here. This applies the world frame rotation directly.
+                    current_quaternion = (
+                        pose.orientation.x,
+                        pose.orientation.y,
+                        pose.orientation.z,
+                        pose.orientation.w
+                    )
+                    
+                    new_quaternion = transformations.quaternion_multiply(delta_quat, current_quaternion)
+                    
+                    pose.orientation.x = new_quaternion[0]
+                    pose.orientation.y = new_quaternion[1]
+                    pose.orientation.z = new_quaternion[2]
+                    pose.orientation.w = new_quaternion[3]
+                # # --------------------------------------------------------------
+
+                # if particle == "leader":
+                self.particle_positions[particle] = pose.position
+                self.particle_orientations[particle] = pose.orientation
+
+                # Prepare Odometry message
+                odom = Odometry()
+                odom.header.stamp = rospy.Time.now()
+                odom.header.frame_id = "map" 
+                odom.pose.pose = pose
+                odom.twist.twist = self.spacenav_twist
+                self.odom_publishers[particle].publish(odom)
+
+        # Handle the control of binded particles
+        for particle in self.binded_particles:
+            # Do not proceed with the "binded" particles until the initial values have been set
+            if not (particle in self.particle_positions) and ("leader" in self.particle_positions):
+                continue
+
+            if self.bind_to_leader_buttons[particle].isChecked():
+                if particle in self.binded_relative_poses:
+                    # calculate the pose of the binded particle in world using the relative pose to the leader
+                    
+                    # Current Pose of the leader in world frame
+                    pos_leader = self.particle_positions["leader"] # Point() msg of ROS geometry_msgs
+                    ori_leader = self.particle_orientations["leader"] # Quaternion() msg of ROS geometry_msgs
+
+                    # Relative Pose of the binded particle in leader's frame
+                    pos_binded_in_leader = self.binded_relative_poses[particle].position # Point() msg of ROS geometry_msgs
+                    ori_binded_in_leader = self.binded_relative_poses[particle].orientation # Quaternion() msg of ROS geometry_msgs
+
+                    # Convert quaternions to rotation matrices
+                    rotation_matrix_leader = transformations.quaternion_matrix([ori_leader.x, ori_leader.y, ori_leader.z, ori_leader.w])
+
+                    # Calculate the position of the binded particle in the world frame
+                    pos_binded_in_world = np.dot(rotation_matrix_leader, np.array([pos_binded_in_leader.x, pos_binded_in_leader.y, pos_binded_in_leader.z, 1]))[:3] + np.array([pos_leader.x, pos_leader.y, pos_leader.z])
+
+                    # Calculate the orientation of the binded particle in the world frame
+                    ori_binded_in_world = transformations.quaternion_multiply([ori_leader.x, ori_leader.y, ori_leader.z, ori_leader.w], [ori_binded_in_leader.x, ori_binded_in_leader.y, ori_binded_in_leader.z, ori_binded_in_leader.w])
+
+                    # Now publish the binded particle's pose as an odom msg
+                    pose = Pose()
+                    pose.position = Point(*pos_binded_in_world) # pos_binded_world
+                    pose.orientation = Quaternion(*ori_binded_in_world) # ori_binded_world
+
+                    # Prepare Odometry message
+                    odom = Odometry()
+                    odom.header.stamp = rospy.Time.now()
+                    odom.header.frame_id = "map" 
+                    odom.pose.pose = pose
+                    # odom.twist.twist.linear = TODO
+                    # odom.twist.twist.angular =  TODO
+                    self.odom_publishers[particle].publish(odom)
+
+                    # Also publish an arrow to distinguish the binded particles
+                    self.publish_arrow_marker(pos_leader,pose,particle)
+                else:
+                    rospy.logwarn(f"Key '{particle}' not found in the binded_relative_poses dictionary.")
+
+    def change_dynamicity_cb(self,particle, is_dynamic):
+        msg = ChangeParticleDynamicity()
+        msg.particle_id = particle
+        msg.is_dynamic = is_dynamic
+        self.pub_change_dynamicity.publish(msg)
+
+    def publish_arrow_marker(self, leader_position, target_pose, particle):
+        # Create a marker for the arrow
+        marker = Marker()
+        marker.header.frame_id = "map"
+        marker.header.stamp = rospy.Time.now()
+        marker.ns = "target_arrow"
+        marker.id = 0
+        marker.type = Marker.ARROW
+        marker.action = Marker.ADD
+        
+        # Set the scale of the arrow
+        marker.scale.x = 0.015  # Shaft diameter
+        marker.scale.y = 0.05  # Head diameter
+        marker.scale.z = 0.3  # Head length
+        
+        # Set the color
+        marker.color.a = 0.3
+        marker.color.r = 0.0
+        marker.color.g = 0.0
+        marker.color.b = 0.7
+        
+        # Set the pose (position and orientation) for the marker
+        marker.pose.orientation.w = 1.0  # Orientation (quaternion)
+        
+        # Set the start and end points of the arrow
+        marker.points = []
+        start_point = leader_position  # Should be a Point message
+        end_point = target_pose.position  # Assuming target_pose is a Pose message
+        marker.points.append(start_point)
+        marker.points.append(end_point)
+        
+        # Publish the marker
+        self.info_binded_pose_publishers[particle].publish(marker)
+
+
+    def spacenav_twist_callback(self, twist):
+        # self.spacenav_twist.linear.x = twist.linear.x # because we are in YZ plane
+        # self.spacenav_twist.linear.y = twist.linear.y
+        # self.spacenav_twist.linear.z = twist.linear.z
+        # self.spacenav_twist.angular.x = twist.angular.x
+        # self.spacenav_twist.angular.y = twist.angular.y  # twist.angular.y because we are in YZ plane
+        # self.spacenav_twist.angular.z = twist.angular.z  # twist.angular.z because we are in YZ plane
+        
+        self.spacenav_twist = twist
+
+        self.last_spacenav_twist_time = rospy.Time.now()
+
+    def check_spacenav_twist_wait_timeout(self):
+        if (rospy.Time.now() - self.last_spacenav_twist_time) > self.spacenav_twist_wait_timeout:
+            # Reset spacenav_twist to zero after timeout
+            self.spacenav_twist = Twist()
+
+            rospy.loginfo("spacenav_twist is zeroed because it's been long time since the last msg arrived..")
+
+    def state_array_callback(self, states_msg):
+        # Positions
+        for particle in self.particles:
+            if not self.buttons_manual[particle].isChecked(): # Needed To prevent conflicts in pose updates when applying manual control
+                self.particle_positions[particle] = states_msg.states[particle].pose.position
+                self.particle_orientations[particle] = states_msg.states[particle].pose.orientation
+                self.particle_twists[particle] = states_msg.states[particle].twist
+
+
+    def initialize_leader_position(self):
+        # Initialize to zero vector
+        position = Point()
+        position.x = 0
+        position.y = 0
+        position.z = 0
+
+        # Initialize to identity rotation
+        quaternion = Quaternion()
+        quaternion.x = 0
+        quaternion.y = 0
+        quaternion.z = 0
+        quaternion.w = 1
+
+        self.particle_positions["leader"] = position
+        self.particle_orientations["leader"] = quaternion
+
+    def manual_control_button_pressed_cb(self, particle):
+        if self.buttons_manual[particle].isChecked():
+            # Button is currently pressed, no need to set it to False
+            print(f"Button for manual control of particle {particle} is now pressed.")
+
+            # Do not proceed with the "non-leader" particles until the initial values have been set
+            if (particle != "leader") and not ((particle in self.particle_positions) and ("leader" in self.particle_positions)):
+                # Make the manual control button unpressed
+                self.buttons_manual[particle].setChecked(False)
+
+                rospy.logwarn("Initial pose values of the object particles or the leader is not yet set")
+            else:
+                if particle in self.binded_particles:
+                    # Unbind particle from leader by deleting the relative pose from the dictionary
+                    if particle in self.binded_relative_poses:
+                        del self.binded_relative_poses[particle]
+                    # else:
+                    #     rospy.loginfo(f"Key '{particle}' not found in the binded_relative_poses dictionary.")
+
+                    # Make the bind to leader button unpressed
+                    self.bind_to_leader_buttons[particle].setChecked(False)
+
+        else:
+            # Button is currently not pressed, no need to set it to True
+            print(f"Button for manual control of particle {particle} is now NOT pressed.")    
+
+    def get_timestep(self, integrator_name):
+        current_time = rospy.Time.now().to_time()
+        if integrator_name in self.last_timestep_requests:
+            dt = current_time - self.last_timestep_requests[integrator_name]
+            self.last_timestep_requests[integrator_name] = current_time
+            if dt > MAX_TIMESTEP:
+                dt = 0.0
+            return dt
+        else:
+            self.last_timestep_requests[integrator_name] = current_time
+            return 0.0
+
+    def check_shutdown(self):
+        if rospy.is_shutdown():
+            qt_widgets.QApplication.quit()
+
+    
+
+if __name__ == "__main__":
+    rospy.init_node('test_gui_node', anonymous=False)
+
+    app = qt_widgets.QApplication(sys.argv)
+
+    gui = TestGUI()
+    gui.show()
+
+    sys.exit(app.exec_())

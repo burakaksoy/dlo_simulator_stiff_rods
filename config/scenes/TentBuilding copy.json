@@ -1,0 +1,88 @@
+{
+	"Name": "ClothCollisionScene1",
+	"RigidBodies": [
+		{
+			"id": 1,
+			"geometryFile": "/home/burak/catkin_ws_deformable/src/dlo_simulator_stiff_rods/data/mesh/cube_5.obj",
+			"isDynamic": 0, 
+			"density": 500, 
+			"translation": [0,0,-0.05],
+			"rotationAxis": [0, 0, 1.0],
+			"rotationAngle": 0.0,
+			"scale": [5.0, 5.0, 0.1],
+			"velocity": [0,0,0],
+			"angularVelocity": [0,0,0],
+			"restitution" : 0.2,
+			"frictionStatic" : 7.4,
+			"frictionDynamic" : 7.2,
+			"comment": "collisionObjectFileName can contain the path of an SDF file or if it is empty, the simulator will generate an SDF using the mesh in the geometryFile",
+			"collisionObjectFileName": "../scenes/Cache/sphere.obj_50_50_50.csdf",
+			"collisionObjectScale": [5.0, 5.0, 0.1],
+			"resolutionSDF": [50,50,50],
+			"invertSDF": 0
+		},
+		{
+			"id": 2,
+			"geometryFile": "/home/burak/catkin_ws_deformable/src/dlo_simulator_stiff_rods/data/mesh/cube_5.obj",
+			"isDynamic": 0, 
+			"density": 500, 
+			"translation": [0,1,0.5],
+			"rotationAxis": [0, 0, 1.0],
+			"rotationAngle": 0.0,
+			"scale": [1.5, 1.0, 1.0],
+			"velocity": [0,0,0],
+			"angularVelocity": [0,0,0],
+			"restitution" : 0.0,
+			"frictionStatic" : 3.4,
+			"frictionDynamic" : 3.4,
+			"comment": "collisionObjectFileName can contain the path of an SDF file or if it is empty, the simulator will generate an SDF using the mesh in the geometryFile",
+			"collisionObjectFileName": "../scenes/Cache/sphere.obj_50_50_50.csdf",
+			"collisionObjectScale": [1.5, 1.0, 1.0],
+			"resolutionSDF": [50,50,50],
+			"invertSDF": 0
+		},
+		{
+			"id": 3,
+			"geometryFile": "/home/burak/catkin_ws_deformable/src/dlo_simulator_stiff_rods/data/mesh/cylinder_vase_unit_box.obj",
+			"isDynamic": 0, 
+			"density": 500, 
+			"translation": [-1,-1,0],
+			"rotationAxis": [1, 0, 0],
+			"rotationAngle": 0.0,
+			"scale": [0.1, 0.1, 0.7],
+			"velocity": [0,0,0],
+			"angularVelocity": [0,0,0],
+			"restitution" : 0.0,
+			"frictionStatic" : 100.6,
+			"frictionDynamic" : 100.6,
+			"comment": "collisionObjectFileName can contain the path of an SDF file or if it is empty, the simulator will generate an SDF using the mesh in the geometryFile",
+			"collisionObjectFileName": "../scenes/Cache/sphere.obj_50_50_50.csdf",
+			"collisionObjectScale": [0.1, 0.1, 0.7],
+			"resolutionSDF": [80,80,80],
+			"invertSDF": 0
+		},
+		{
+			"id": 4,
+			"geometryFile": "/home/burak/catkin_ws_deformable/src/dlo_simulator_stiff_rods/data/mesh/cylinder_vase_unit_box.obj",
+			"isDynamic": 0, 
+			"density": 500, 
+			"translation": [1,-1,0],
+			"rotationAxis": [1, 0, 0],
+			"rotationAngle": 0.0,
+			"scale": [0.1, 0.1, 0.7],
+			"velocity": [0,0,0],
+			"angularVelocity": [0,0,0],
+			"restitution" : 0.0,
+			"frictionStatic" : 100.6,
+			"frictionDynamic" : 100.6,
+			"comment": "collisionObjectFileName can contain the path of an SDF file or if it is empty, the simulator will generate an SDF using the mesh in the geometryFile",
+			"collisionObjectFileName": "../scenes/Cache/sphere.obj_50_50_50.csdf",
+			"collisionObjectScale": [0.1, 0.1, 0.7],
+			"resolutionSDF": [80,80,80],
+			"invertSDF": 0
+		}
+
+	]
+}
+
+

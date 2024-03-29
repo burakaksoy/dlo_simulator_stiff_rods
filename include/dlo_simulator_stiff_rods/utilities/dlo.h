@@ -112,19 +112,27 @@ public:
 
     void preSolve(const Real &dt, const Eigen::Matrix<Real,3,1> &gravity);
     void solve(const Real &dt);
-    void postSolve(const Real &dt);
+    void postSolve(const Real &dt);    
 
-
+    void changeParticleDynamicity(const int &particle, const bool &is_dynamic);
+    
     void setStaticParticles(const std::vector<int> &particles);
+    void setDynamicParticles(const std::vector<int> &particles);
+    
+    const bool isStaticParticle(const int &particle);
+    const bool isDynamicParticle(const int &particle);
     
     int attachNearest(const Eigen::Matrix<Real,3,1> &pos);
     void updateAttachedPose(const int &id, 
                             const Eigen::Matrix<Real,3,1> &pos, 
                             const Eigen::Quaternion<Real> &ori);
 
-    /*
+    void updateAttachedVelocity(const int &id, 
+                                const Eigen::Matrix<Real,3,1> &vel, 
+                                const Eigen::Matrix<Real,3,1> &omega);
+
     void resetForces();
-    */
+    void normalizeForces(const int &num_substeps);
 
     Eigen::Matrix2Xi *getStretchBendTwistIdsPtr();
 
@@ -183,6 +191,7 @@ private:
     Eigen::Matrix<Real,3,Eigen::Dynamic> vel_;
     Eigen::Matrix<Real,3,Eigen::Dynamic> for_;
     std::vector<Real> inv_mass_;
+    std::vector<bool> is_dynamic_; // vector that holds the data whether the particle is dynamic or not
 
     // Orientation Data
     std::vector<Eigen::Quaternion<Real>> ori_;
@@ -214,9 +223,7 @@ private:
     Real global_damp_coeff_v_; 
     Real global_damp_coeff_w_;
     
-
     std::vector<int> attached_ids_; // ids of robot attached particles
-    // int grab_id_;
 };
 
 } // namespace pbd_object

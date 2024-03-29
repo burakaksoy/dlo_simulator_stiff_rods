@@ -11,14 +11,18 @@
 #include <geometry_msgs/Point.h>
 #include <geometry_msgs/Vector3.h>
 #include <geometry_msgs/WrenchStamped.h>
+#include <geometry_msgs/Twist.h>
 #include <std_msgs/Float32.h>
 #include <std_msgs/Int32MultiArray.h>
 #include <std_msgs/Header.h>
 #include <nav_msgs/Odometry.h>
 
 #include <dlo_simulator_stiff_rods/MinDistanceDataArray.h> 
+#include <dlo_simulator_stiff_rods/ChangeParticleDynamicity.h> 
+#include <dlo_simulator_stiff_rods/SegmentStateArray.h> 
 
 #include <std_srvs/Empty.h>
+#include <dlo_simulator_stiff_rods/SetParticleDynamicity.h> // service
 
 #include <time.h>
 #include <math.h>
@@ -118,29 +122,35 @@ private:
     void setupWireframeMarker(visualization_msgs::Marker &marker);
 
     void publishMinDistancesToRigidBodies(const ros::TimerEvent& e);
+    void publishDloState(const ros::TimerEvent& e);
 
     void publishMinDistLineMarkers(const std::vector<std::vector<utilities::CollisionHandler::MinDistanceData>>& min_distances_mt);
 
     // Odometry callback functions 
-    void odometryCb_01(const nav_msgs::Odometry::ConstPtr odom_msg);
-    void odometryCb_02(const nav_msgs::Odometry::ConstPtr odom_msg);
-    void odometryCb_03(const nav_msgs::Odometry::ConstPtr odom_msg);
-    void odometryCb_04(const nav_msgs::Odometry::ConstPtr odom_msg);
-
+    
     void odometryCb_custom_static_particles(const nav_msgs::Odometry::ConstPtr& odom_msg, const int& id);
     
+    void cmdVelCb_custom_static_particles(const geometry_msgs::Twist::ConstPtr& twist_msg, const int& id);
+    
+    // Change Dynamicity callback function
+    void changeParticleDynamicityCb(const dlo_simulator_stiff_rods::ChangeParticleDynamicity::ConstPtr change_particle_dynamicity_msg);
+
     
     // Service functions
     bool updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res);
     void reset();
     void initialize() { std_srvs::Empty empt; updateParams(empt.request, empt.response); }
+                                
+    bool setParticleDynamicityCallback(dlo_simulator_stiff_rods::SetParticleDynamicity::Request &req,
+                                       dlo_simulator_stiff_rods::SetParticleDynamicity::Response &res);
 
     // ROS variables---------------------------------
     ros::NodeHandle nh_;
     ros::NodeHandle nh_local_;
     boost::recursive_mutex &mtx_;
 
-    ros::Publisher pub_dlo_points_;
+    ros::Publisher pub_dlo_state_;
+    ros::Publisher pub_dlo_marker_array_;
     /*
     ros::Publisher pub_wrench_stamped_01_;
     ros::Publisher pub_wrench_stamped_02_;
@@ -154,14 +164,13 @@ private:
     ros::Publisher pub_min_dist_marker_array_;
 
     ros::ServiceServer params_srv_;
-    
-    ros::Subscriber sub_odom_01_;
-    ros::Subscriber sub_odom_02_;
-    ros::Subscriber sub_odom_03_;
-    ros::Subscriber sub_odom_04_;
 
-    // Define the vector of subscribers
-    std::vector<ros::Subscriber> custom_static_particles_odom_subscribers_;
+    ros::Subscriber sub_change_particle_dynamicity_;
+    ros::ServiceServer set_particle_dynamicity_srv_;
+
+    // Map to hold particle ID and its corresponding subscriber
+    std::map<int, ros::Subscriber> custom_static_particles_odom_subscribers_;
+    std::map<int, ros::Subscriber> custom_static_particles_cmd_vel_subscribers_;
     
     ros::Timer timer_render_;
     ros::Timer timer_simulate_;
@@ -170,6 +179,7 @@ private:
     */
     ros::Timer timer_render_rb_;
     ros::Timer timer_min_dist_to_rb_pub_; // renderMinDistancesToRigidBodies
+    ros::Timer timer_dlo_state_pub_; // renderMinDistancesToRigidBodies
 
     // ROS Parameters
     bool p_active_;
@@ -219,6 +229,7 @@ private:
     std::vector<int> custom_static_particles_; // particle ids to set as static
 
     std::string custom_static_particles_odom_topic_prefix_;
+    std::string custom_static_particles_cmd_vel_topic_prefix_;
 
     Real simulation_rate_;
     Real rendering_rate_;
@@ -226,18 +237,15 @@ private:
     Real wrench_pub_rate_;
     */
     Real rendering_rb_rate_;
-    Real min_dist_to_rb_pub_rate_; // TODO
+    Real min_dist_to_rb_pub_rate_;
+    Real dlo_state_pub_rate_;
 
     std::string rb_scene_config_path_;
 
-    std::string dlo_points_topic_name_;
-    std::string dlo_points_frame_id_;
+    std::string dlo_state_topic_name_;
+    std::string dlo_markers_topic_name_;
+    std::string dlo_frame_id_;
     
-    std::string odom_01_topic_name_;
-    std::string odom_02_topic_name_;
-    std::string odom_03_topic_name_;
-    std::string odom_04_topic_name_;
-
     /*
     std::string wrench_01_topic_name_;
     std::string wrench_02_topic_name_;
@@ -252,7 +260,8 @@ private:
     std::string min_dist_to_rb_topic_name_;
     std::string min_dist_markers_topic_name_;
 
-    Real dlo_rob_z_offset_; // Additional  attachment height to robots
+    std::string change_particle_dynamicity_topic_name_;
+    std::string set_particle_dynamicity_service_name_;
 
     // Dlo visualization parameters 
     Real point_marker_scale_;

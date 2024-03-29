@@ -45,6 +45,7 @@ DloSimulator::DloSimulator(ros::NodeHandle &nh, ros::NodeHandle &nh_local, boost
     */
     timer_render_rb_ = nh_.createTimer(ros::Duration(1.0), &DloSimulator::renderRigidBodies, this,false, false); 
     timer_min_dist_to_rb_pub_ = nh_.createTimer(ros::Duration(1.0), &DloSimulator::publishMinDistancesToRigidBodies, this,false, false); 
+    timer_dlo_state_pub_ = nh_.createTimer(ros::Duration(1.0), &DloSimulator::publishDloState, this,false, false); 
 
     // Initilize parameters
     params_srv_ = nh_local_.advertiseService("params", &DloSimulator::updateParams, this);
@@ -94,6 +95,7 @@ DloSimulator::~DloSimulator() {
     nh_local_.deleteParam("custom_static_particles");
 
     nh_local_.deleteParam("custom_static_particles_odom_topic_prefix");
+    nh_local_.deleteParam("custom_static_particles_cmd_vel_topic_prefix");
 
     nh_local_.deleteParam("simulation_rate");
     nh_local_.deleteParam("rendering_rate");
@@ -102,16 +104,13 @@ DloSimulator::~DloSimulator() {
     */
     nh_local_.deleteParam("rendering_rb_rate");
     nh_local_.deleteParam("min_dist_to_rb_pub_rate");
+    nh_local_.deleteParam("dlo_state_pub_rate");
 
     nh_local_.deleteParam("rb_scene_config_path");
 
-    nh_local_.deleteParam("dlo_points_topic_name");
-    nh_local_.deleteParam("dlo_points_frame_id");
-    
-    nh_local_.deleteParam("odom_01_topic_name");
-    nh_local_.deleteParam("odom_02_topic_name");
-    nh_local_.deleteParam("odom_03_topic_name");
-    nh_local_.deleteParam("odom_04_topic_name");
+    nh_local_.deleteParam("dlo_state_topic_name");
+    nh_local_.deleteParam("dlo_markers_topic_name");
+    nh_local_.deleteParam("dlo_frame_id");
 
     nh_local_.deleteParam("point_marker_scale");
 
@@ -128,6 +127,9 @@ DloSimulator::~DloSimulator() {
 
     nh_local_.deleteParam("min_dist_to_rb_topic_name");
     nh_local_.deleteParam("min_dist_markers_topic_name");
+
+    nh_local_.deleteParam("change_particle_dynamicity_topic_name");
+    nh_local_.deleteParam("set_particle_dynamicity_service_name");
  
     nh_local_.deleteParam("rb_line_marker_scale_multiplier");
 
@@ -151,7 +153,6 @@ DloSimulator::~DloSimulator() {
     nh_local_.deleteParam("wrench_04_frame_id");
     */
 
-    nh_local_.deleteParam("dlo_rob_z_offset");
 }
 
 bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res)
@@ -205,6 +206,7 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
     nh_local_.param("custom_static_particles", custom_static_particles_, std::vector<int>());
 
     nh_local_.param<std::string>("custom_static_particles_odom_topic_prefix", custom_static_particles_odom_topic_prefix_, std::string("custom_static_particles_odom_"));
+    nh_local_.param<std::string>("custom_static_particles_cmd_vel_topic_prefix", custom_static_particles_cmd_vel_topic_prefix_, std::string("custom_static_particles_cmd_vel_"));
 
     nh_local_.param<Real>("simulation_rate", simulation_rate_, 90.0); 
     nh_local_.param<Real>("rendering_rate", rendering_rate_, 30.0);
@@ -213,17 +215,13 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
     */
     nh_local_.param<Real>("rendering_rb_rate", rendering_rb_rate_, 1.0); //1
     nh_local_.param<Real>("min_dist_to_rb_pub_rate", min_dist_to_rb_pub_rate_, 60.0); //60.0
+    nh_local_.param<Real>("dlo_state_pub_rate", dlo_state_pub_rate_, 60.0); //60.0
 
     nh_local_.param<std::string>("rb_scene_config_path", rb_scene_config_path_, std::string(""));
 
-    nh_local_.param<std::string>("dlo_points_topic_name", dlo_points_topic_name_, std::string("dlo_points"));
-    nh_local_.param<std::string>("dlo_points_frame_id", dlo_points_frame_id_, std::string("map"));
-
-    
-    nh_local_.param<std::string>("odom_01_topic_name", odom_01_topic_name_, std::string("d1/ground_truth/dlo_mount/odom"));
-    nh_local_.param<std::string>("odom_02_topic_name", odom_02_topic_name_, std::string("d2/ground_truth/dlo_mount/odom"));
-    nh_local_.param<std::string>("odom_03_topic_name", odom_03_topic_name_, std::string("d3/ground_truth/dlo_mount/odom"));
-    nh_local_.param<std::string>("odom_04_topic_name", odom_04_topic_name_, std::string("d4/ground_truth/dlo_mount/odom"));
+    nh_local_.param<std::string>("dlo_state_topic_name", dlo_state_topic_name_, std::string("dlo_state"));
+    nh_local_.param<std::string>("dlo_markers_topic_name", dlo_markers_topic_name_, std::string("dlo_markers"));
+    nh_local_.param<std::string>("dlo_frame_id", dlo_frame_id_, std::string("map"));
     
     /*
     nh_local_.param<std::string>("wrench_01_topic_name", wrench_01_topic_name_, std::string("d1/dlo_wrench_stamped"));
@@ -236,8 +234,6 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
     nh_local_.param<std::string>("wrench_03_frame_id", wrench_03_frame_id_, std::string("d3_tf_dlo_mount_link"));
     nh_local_.param<std::string>("wrench_04_frame_id", wrench_04_frame_id_, std::string("d4_tf_dlo_mount_link"));
     */
-
-    nh_local_.param<Real>("dlo_rob_z_offset_", dlo_rob_z_offset_, 0.0); // 0.785145); // makes it 80cm above ground
 
     nh_local_.param<Real>("point_marker_scale",   point_marker_scale_,   0.015);
 
@@ -254,6 +250,8 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
     nh_local_.param<std::string>("min_dist_to_rb_topic_name", min_dist_to_rb_topic_name_, std::string("min_dist_to_rigid_bodies"));
     nh_local_.param<std::string>("min_dist_markers_topic_name", min_dist_markers_topic_name_, std::string("min_dist_markers"));
 
+    nh_local_.param<std::string>("change_particle_dynamicity_topic_name", change_particle_dynamicity_topic_name_, std::string("change_particle_dynamicity"));
+    nh_local_.param<std::string>("set_particle_dynamicity_service_name", set_particle_dynamicity_service_name_, std::string("set_particle_dynamicity"));
 
     nh_local_.param<Real>("rb_line_marker_scale_multiplier", rb_line_marker_scale_multiplier_, 1.0);
     
@@ -273,6 +271,7 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
     */
     timer_render_rb_.setPeriod(ros::Duration(1.0/rendering_rb_rate_));
     timer_min_dist_to_rb_pub_.setPeriod(ros::Duration(1.0/min_dist_to_rb_pub_rate_));
+    timer_dlo_state_pub_.setPeriod(ros::Duration(1.0/dlo_state_pub_rate_));
 
     // Initilize gravity vector
     gravity_ << gravity_x_, gravity_y_, gravity_z_;    
@@ -518,24 +517,40 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
     if (p_active_ != prev_active) {
         if (p_active_) {
             // Create visualization marker publisher
-            pub_dlo_points_ = nh_.advertise<visualization_msgs::MarkerArray>(dlo_points_topic_name_, 1);
+            pub_dlo_state_ = nh_.advertise<dlo_simulator_stiff_rods::SegmentStateArray>(dlo_state_topic_name_, 1);
+            pub_dlo_marker_array_ = nh_.advertise<visualization_msgs::MarkerArray>(dlo_markers_topic_name_, 1);
 
-            // Create a subscriber for each custom static particle 
+            // Create a subscriber for each custom static particle
             for (const int& particle_id : custom_static_particles_) {
-                std::string topic = custom_static_particles_odom_topic_prefix_ + std::to_string(particle_id);
-                ros::Subscriber sub = nh_.subscribe<nav_msgs::Odometry>(topic, 10,
-                                                                        [this, particle_id](const nav_msgs::Odometry::ConstPtr& odom_msg) { 
-                                                                            this->odometryCb_custom_static_particles(odom_msg, particle_id); }
-                                                                        );
-                custom_static_particles_odom_subscribers_.push_back(sub);
+                // Check if a subscriber for this particle ID already exists
+                if (custom_static_particles_odom_subscribers_.find(particle_id) == custom_static_particles_odom_subscribers_.end()) {
+                    std::string topic = custom_static_particles_odom_topic_prefix_ + std::to_string(particle_id);
+                    ros::Subscriber sub = nh_.subscribe<nav_msgs::Odometry>(topic, 1,
+                                                                            [this, particle_id](const nav_msgs::Odometry::ConstPtr& odom_msg) { 
+                                                                                this->odometryCb_custom_static_particles(odom_msg, particle_id); }
+                                                                            );    
+                    // Add the new subscriber to the map
+                    custom_static_particles_odom_subscribers_[particle_id] = sub;
+                }
+                // Else, a subscriber for this particle ID already exists
+
+                if (custom_static_particles_cmd_vel_subscribers_.find(particle_id) == custom_static_particles_cmd_vel_subscribers_.end()) {
+                    std::string topic = custom_static_particles_cmd_vel_topic_prefix_ + std::to_string(particle_id);
+                    ros::Subscriber sub = nh_.subscribe<geometry_msgs::Twist>(topic, 10,
+                                                                            [this, particle_id](const geometry_msgs::Twist::ConstPtr& twist_msg) { 
+                                                                                this->cmdVelCb_custom_static_particles(twist_msg, particle_id); }
+                                                                            );    
+                    // Add the new subscriber to the map
+                    custom_static_particles_cmd_vel_subscribers_[particle_id] = sub;
+                }
+                // Else, a subscriber for this particle ID already exists
             }
 
-
-            // Create subscribers
-            sub_odom_01_ = nh_.subscribe(odom_01_topic_name_, 1, &DloSimulator::odometryCb_01, this);
-            sub_odom_02_ = nh_.subscribe(odom_02_topic_name_, 1, &DloSimulator::odometryCb_02, this);
-            sub_odom_03_ = nh_.subscribe(odom_03_topic_name_, 1, &DloSimulator::odometryCb_03, this);
-            sub_odom_04_ = nh_.subscribe(odom_04_topic_name_, 1, &DloSimulator::odometryCb_04, this);
+            //Create subscribers
+            sub_change_particle_dynamicity_ = nh_.subscribe(change_particle_dynamicity_topic_name_, 
+                                                            1, 
+                                                            &DloSimulator::changeParticleDynamicityCb, 
+                                                            this);
 
             /*
             // Create publishers
@@ -551,6 +566,10 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
 
             pub_min_dist_marker_array_ = nh_.advertise<visualization_msgs::MarkerArray>(min_dist_markers_topic_name_, 1);
 
+            // Create Services
+            set_particle_dynamicity_srv_ = nh_local_.advertiseService(set_particle_dynamicity_service_name_, 
+                                                                    &DloSimulator::setParticleDynamicityCallback, this);
+
             // Start timers
             timer_simulate_.start();
             timer_render_.start();
@@ -559,20 +578,26 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
             */
             timer_render_rb_.start();
             timer_min_dist_to_rb_pub_.start();
+            timer_dlo_state_pub_.start();
         }
         else {
             // Send empty message?/*
 
             // Stop publishers
-            pub_dlo_points_.shutdown();
+            pub_dlo_state_.shutdown();
+            pub_dlo_marker_array_.shutdown();
 
             // Stop subscribers
-            sub_odom_01_.shutdown();
-            sub_odom_02_.shutdown();
-            sub_odom_03_.shutdown();
-            sub_odom_04_.shutdown();
+            sub_change_particle_dynamicity_.shutdown();
 
-            for(ros::Subscriber& subscriber : custom_static_particles_odom_subscribers_) {
+            // Iterate through the map and shut down each subscriber
+            for (auto& kv : custom_static_particles_odom_subscribers_) {
+                ros::Subscriber& subscriber = kv.second; // Get the subscriber (which is the value in the key-value pair)
+                subscriber.shutdown();
+            }
+
+            for (auto& kv : custom_static_particles_cmd_vel_subscribers_) {
+                ros::Subscriber& subscriber = kv.second; // Get the subscriber (which is the value in the key-value pair)
                 subscriber.shutdown();
             }
 
@@ -596,6 +621,7 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
             */
             timer_render_rb_.stop();
             timer_min_dist_to_rb_pub_.stop();
+            timer_dlo_state_pub_.stop();
             
         }
     }
@@ -633,6 +659,139 @@ void DloSimulator::reset(){
 
     p_reset_ = false;
     nh_local_.setParam("reset",false);
+}
+
+bool DloSimulator::setParticleDynamicityCallback(dlo_simulator_stiff_rods::SetParticleDynamicity::Request &req,
+                                                 dlo_simulator_stiff_rods::SetParticleDynamicity::Response &res)
+{
+    int particle_id = req.particle_id;
+    bool is_dynamic = req.is_dynamic;
+    
+    try {
+        dlo_.changeParticleDynamicity(particle_id, is_dynamic);
+    } catch (const std::out_of_range& e) {
+        ROS_ERROR("Error in setParticleDynamicity: %s", e.what());
+        res.success = false; // Indicate failure
+        return true; // Still return true to indicate the service call was processed
+    }
+
+    // Check if a subscriber for this particle ID exists
+    auto sub_iter = custom_static_particles_odom_subscribers_.find(particle_id);
+    auto sub_iter_cmd_vel = custom_static_particles_cmd_vel_subscribers_.find(particle_id);
+
+    if (is_dynamic){  // particle is being tried to set dynamic
+        if (sub_iter != custom_static_particles_odom_subscribers_.end()) {
+            // Subscriber exists, shut it down
+            sub_iter->second.shutdown();
+            custom_static_particles_odom_subscribers_.erase(sub_iter); // Remove the subscriber from the map
+            res.success = true;
+        } else {
+            // No subscriber was found for the given ID
+            res.success = false; 
+        }
+
+        if (sub_iter_cmd_vel != custom_static_particles_cmd_vel_subscribers_.end()) {
+            // Subscriber exists, shut it down
+            sub_iter_cmd_vel->second.shutdown();
+            custom_static_particles_cmd_vel_subscribers_.erase(sub_iter_cmd_vel); // Remove the subscriber from the map
+            res.success = true;
+        } else {
+            // No subscriber was found for the given ID
+            res.success = false; 
+        }
+    }
+    else{ // particle is being tried to set static
+        if (sub_iter != custom_static_particles_odom_subscribers_.end()) {
+            // Subscriber already exists, so just return with success
+            res.success = true;
+        } else {
+            // Subscriber does not exist, create a new one
+            std::string topic = custom_static_particles_odom_topic_prefix_ + std::to_string(particle_id);
+            ros::Subscriber sub = nh_.subscribe<nav_msgs::Odometry>(topic, 1,
+                                                                    [this, particle_id](const nav_msgs::Odometry::ConstPtr& odom_msg) { 
+                                                                        this->odometryCb_custom_static_particles(odom_msg, particle_id); }
+                                                                    );
+            custom_static_particles_odom_subscribers_[particle_id] = sub; // Add the new subscriber to the map
+
+            res.success = true; // Indicate success
+        }
+
+        if (sub_iter_cmd_vel != custom_static_particles_cmd_vel_subscribers_.end()) {
+            // Subscriber already exists, so just return with success
+            res.success = true;
+        } else {
+            // Subscriber does not exist, create a new one
+            std::string topic = custom_static_particles_cmd_vel_topic_prefix_ + std::to_string(particle_id);
+            ros::Subscriber sub = nh_.subscribe<geometry_msgs::Twist>(topic, 10,
+                                                                    [this, particle_id](const geometry_msgs::Twist::ConstPtr& twist_msg) { 
+                                                                        this->cmdVelCb_custom_static_particles(twist_msg, particle_id); }
+                                                                    );
+            custom_static_particles_cmd_vel_subscribers_[particle_id] = sub; // Add the new subscriber to the map
+
+            res.success = true; // Indicate success
+        }
+    }
+
+    return true;
+}
+
+void DloSimulator::changeParticleDynamicityCb(const dlo_simulator_stiff_rods::ChangeParticleDynamicity::ConstPtr msg){
+    int particle_id = msg->particle_id;
+    bool is_dynamic = msg->is_dynamic;
+    
+    try {
+        dlo_.changeParticleDynamicity(particle_id, is_dynamic);
+    } catch (const std::out_of_range& e) {
+        ROS_ERROR("Error in changeParticleDynamicityCb: %s", e.what()); // Indicate failure
+        return;
+    }
+
+    // Check if a subscriber for this particle ID exists
+    auto sub_iter = custom_static_particles_odom_subscribers_.find(particle_id);
+    auto sub_iter_cmd_vel = custom_static_particles_cmd_vel_subscribers_.find(particle_id);
+
+    if (is_dynamic){  // particle is being tried to set dynamic
+        if (sub_iter != custom_static_particles_odom_subscribers_.end()) {
+            // Subscriber exists, shut it down
+            sub_iter->second.shutdown();
+            custom_static_particles_odom_subscribers_.erase(sub_iter); // Remove the subscriber from the map
+        } else {
+            // No subscriber was found for the given ID
+        }
+
+        if (sub_iter_cmd_vel != custom_static_particles_cmd_vel_subscribers_.end()) {
+            // Subscriber exists, shut it down
+            sub_iter_cmd_vel->second.shutdown();
+            custom_static_particles_cmd_vel_subscribers_.erase(sub_iter_cmd_vel); // Remove the subscriber from the map
+        } else {
+            // No subscriber was found for the given ID
+        }
+    }
+    else{ // particle is being tried to set static
+        if (sub_iter != custom_static_particles_odom_subscribers_.end()) {
+            // Subscriber already exists, so just return with success
+        } else {
+            // Subscriber does not exist, create a new one
+            std::string topic = custom_static_particles_odom_topic_prefix_ + std::to_string(particle_id);
+            ros::Subscriber sub = nh_.subscribe<nav_msgs::Odometry>(topic, 1,
+                                                                    [this, particle_id](const nav_msgs::Odometry::ConstPtr& odom_msg) { 
+                                                                        this->odometryCb_custom_static_particles(odom_msg, particle_id); }
+                                                                    );
+            custom_static_particles_odom_subscribers_[particle_id] = sub; // Add the new subscriber to the map
+        }
+
+        if (sub_iter_cmd_vel != custom_static_particles_cmd_vel_subscribers_.end()) {
+            // Subscriber already exists, so just return with success
+        } else {
+            // Subscriber does not exist, create a new one
+            std::string topic = custom_static_particles_cmd_vel_topic_prefix_ + std::to_string(particle_id);
+            ros::Subscriber sub = nh_.subscribe<geometry_msgs::Twist>(topic, 10,
+                                                                    [this, particle_id](const geometry_msgs::Twist::ConstPtr& twist_msg) { 
+                                                                        this->cmdVelCb_custom_static_particles(twist_msg, particle_id); }
+                                                                    );
+            custom_static_particles_cmd_vel_subscribers_[particle_id] = sub; // Add the new subscriber to the map
+        }
+    }
 }
 
 pbd_object::MeshDLO DloSimulator::createMeshDLO(const std::string &name, 
@@ -745,7 +904,7 @@ pbd_object::MeshDLO DloSimulator::transformMeshDLO(const pbd_object::MeshDLO &me
         Eigen::Quaternion<Real> &quaternion = transformed_mesh.quaternions[i];
         // Update the quaternion here with the new orientation
         quaternion = rotationQuaternion * quaternion; // Apply rotation
-        std::cout << "quaternion[i]: " << quaternion.coeffs() << std::endl;
+        // std::cout << "quaternion[i]: " << quaternion.coeffs() << std::endl;
     }
     return transformed_mesh;
 }
@@ -861,9 +1020,11 @@ void DloSimulator::simulate(const ros::TimerEvent& e){
     Real sdt = dt_ / num_substeps_;
 
     ros::Time start_time = ros::Time::now();
-
+    
     // Small steps implementation
     // -------------------------------
+    dlo_.resetForces();
+
     for (int i = 0; i< num_steps_; i++){
         int j;
         for (j = 0; j < num_substeps_; j++){
@@ -896,10 +1057,8 @@ void DloSimulator::simulate(const ros::TimerEvent& e){
     // std::cout << "id: " << id << ". Force = " << for_ptr->col(id)/num_substeps_ << " N." << std::endl;
 
     // +++++++++++++++++++++++++++++++++++++++++++++++++++==
-    /*
-    readAttachedRobotForces();
-    dlo_.resetForces();
-    */
+    // readAttachedRobotForces();
+    dlo_.normalizeForces(num_substeps_);
     // +++++++++++++++++++++++++++++++++++++++++++++++++++==
 
     ros::Time finish_time = ros::Time::now();
@@ -922,6 +1081,9 @@ void DloSimulator::simulate(const ros::TimerEvent& e){
 }
 
 void DloSimulator::render(const ros::TimerEvent& e){
+    if (dlo_visualization_mode_ == -1){
+        return;
+    }
     // // With some kind of self lock to prevent collision with simulation
     boost::recursive_mutex::scoped_lock lock(mtx_);
 
@@ -965,12 +1127,12 @@ void DloSimulator::render(const ros::TimerEvent& e){
         markerArray.markers.push_back(framesMarker);
     }
 
-    pub_dlo_points_.publish(markerArray);
+    pub_dlo_marker_array_.publish(markerArray);
 }
 
 void DloSimulator::createRvizPointsMarker(const std::vector<Eigen::Matrix<Real,3,1>> *poses, 
                                           visualization_msgs::Marker &marker){
-    marker.header.frame_id = dlo_points_frame_id_;
+    marker.header.frame_id = dlo_frame_id_;
     marker.header.stamp = ros::Time::now();
     marker.type = visualization_msgs::Marker::POINTS;
     marker.action = visualization_msgs::Marker::ADD;
@@ -998,7 +1160,7 @@ void DloSimulator::createRvizLinesMarker(const std::vector<Eigen::Matrix<Real,3,
                                          const std::vector<Eigen::Quaternion<Real>> *orients,
                                          const std::vector<Real> *lengths,
                                          visualization_msgs::Marker &marker){
-    marker.header.frame_id = dlo_points_frame_id_;
+    marker.header.frame_id = dlo_frame_id_;
     marker.header.stamp = ros::Time::now();
     marker.type = visualization_msgs::Marker::LINE_LIST;
     marker.action = visualization_msgs::Marker::ADD;
@@ -1041,7 +1203,7 @@ void DloSimulator::createRvizLinesMarker(const std::vector<Eigen::Matrix<Real,3,
 void DloSimulator::createRvizFramesMarker(const std::vector<Eigen::Matrix<Real,3,1>> *poses,
                                          const std::vector<Eigen::Quaternion<Real>> *orients,
                                          visualization_msgs::Marker &marker){
-    marker.header.frame_id = dlo_points_frame_id_;
+    marker.header.frame_id = dlo_frame_id_;
     marker.header.stamp = ros::Time::now();
 
     //frame_marker_scale_
@@ -1104,6 +1266,10 @@ void DloSimulator::addAxisLineToMarker(visualization_msgs::Marker &marker,
 
 // Publish message to RVIZ to visualize the rigid bodies considered in the simulation
 void DloSimulator::renderRigidBodies(const ros::TimerEvent& e){
+    if (rb_visualization_mode_ == -1){
+        return;
+    }
+
     visualization_msgs::MarkerArray markerArray;
     marker_id_ = 0; 
 
@@ -1159,7 +1325,7 @@ void DloSimulator::createMeshAndWireframeMarkers(const Eigen::Matrix<Real,Eigen:
 }
 
 void DloSimulator::setupMeshMarker(visualization_msgs::Marker &marker){
-    marker.header.frame_id = dlo_points_frame_id_;
+    marker.header.frame_id = dlo_frame_id_;
     marker.header.stamp = ros::Time::now();
 
     marker.type = visualization_msgs::Marker::TRIANGLE_LIST;
@@ -1182,7 +1348,7 @@ void DloSimulator::setupMeshMarker(visualization_msgs::Marker &marker){
 }
 
 void DloSimulator::setupWireframeMarker(visualization_msgs::Marker &marker){
-    marker.header.frame_id = dlo_points_frame_id_;
+    marker.header.frame_id = dlo_frame_id_;
     marker.header.stamp = ros::Time::now();
 
     marker.type = visualization_msgs::Marker::LINE_LIST;
@@ -1207,9 +1373,20 @@ void DloSimulator::odometryCb_custom_static_particles(const nav_msgs::Odometry::
     // // With some kind of self lock to prevent collision with simulation
     boost::recursive_mutex::scoped_lock lock(mtx_);
 
+    // Update Velocity
+    const Eigen::Matrix<Real,3,1> vel(odom_msg->twist.twist.linear.x, 
+                                        odom_msg->twist.twist.linear.y, 
+                                        odom_msg->twist.twist.linear.z);
+
+    const Eigen::Matrix<Real,3,1> omega(odom_msg->twist.twist.angular.x, 
+                                        odom_msg->twist.twist.angular.y, 
+                                        odom_msg->twist.twist.angular.z);
+
+
+    // Update pose
     const Real x = odom_msg->pose.pose.position.x;
     const Real y = odom_msg->pose.pose.position.y;
-    const Real z = odom_msg->pose.pose.position.z + dlo_rob_z_offset_;
+    const Real z = odom_msg->pose.pose.position.z;
 
     const Real qw = odom_msg->pose.pose.orientation.w;
     const Real qx = odom_msg->pose.pose.orientation.x;
@@ -1219,144 +1396,26 @@ void DloSimulator::odometryCb_custom_static_particles(const nav_msgs::Odometry::
     Eigen::Matrix<Real,3,1> pos(x, y, z);
     Eigen::Quaternion<Real> ori(qw,qx,qy,qz);
 
+    dlo_.updateAttachedVelocity(id, vel, omega);
     dlo_.updateAttachedPose(id, pos, ori);
 }
 
-void DloSimulator::odometryCb_01(const nav_msgs::Odometry::ConstPtr odom_msg){
+void DloSimulator::cmdVelCb_custom_static_particles(const geometry_msgs::Twist::ConstPtr& twist_msg, const int& id) {
     // // With some kind of self lock to prevent collision with simulation
     boost::recursive_mutex::scoped_lock lock(mtx_);
 
-    const Real & x = odom_msg->pose.pose.position.x;
-    const Real & y = odom_msg->pose.pose.position.y;
-    const Real & z = odom_msg->pose.pose.position.z + dlo_rob_z_offset_;
+    // Update Velocity
+    const Eigen::Matrix<Real,3,1> vel(twist_msg->linear.x, 
+                                      twist_msg->linear.y, 
+                                      twist_msg->linear.z);
 
-    const Real & qw = odom_msg->pose.pose.orientation.w;
-    const Real & qx = odom_msg->pose.pose.orientation.x;
-    const Real & qy = odom_msg->pose.pose.orientation.y;
-    const Real & qz = odom_msg->pose.pose.orientation.z;
-    
-    Eigen::Matrix<Real,3,1> pos(x, y, z);
-    Eigen::Quaternion<Real> ori(qw,qx,qy,qz);
+    const Eigen::Matrix<Real,3,1> omega(twist_msg->angular.x, 
+                                        twist_msg->angular.y, 
+                                        twist_msg->angular.z);
 
-    if (!is_rob_01_attached_)
-    {
-        // tell sim objects (dlo) to attach robot to the nearest particles
-        rob_01_attached_id_ = dlo_.attachNearest(pos);
-        // std::cout << "self.rob_01_attached_id, " << rob_01_attached_id_ << std::endl;
-
-        if (rob_01_attached_id_ != -1)
-        {
-            is_rob_01_attached_ = true;
-        }
-    }
-    else
-    {
-        // tell sim object to update its position
-        dlo_.updateAttachedPose(rob_01_attached_id_, pos, ori);
-    }
+    dlo_.updateAttachedVelocity(id, vel, omega);
 }
 
-void DloSimulator::odometryCb_02(const nav_msgs::Odometry::ConstPtr odom_msg){
-    // // With some kind of self lock to prevent collision with simulation
-    boost::recursive_mutex::scoped_lock lock(mtx_);
-
-    const Real & x = odom_msg->pose.pose.position.x;
-    const Real & y = odom_msg->pose.pose.position.y;
-    const Real & z = odom_msg->pose.pose.position.z + dlo_rob_z_offset_;
-
-    const Real & qw = odom_msg->pose.pose.orientation.w;
-    const Real & qx = odom_msg->pose.pose.orientation.x;
-    const Real & qy = odom_msg->pose.pose.orientation.y;
-    const Real & qz = odom_msg->pose.pose.orientation.z;
-    
-    Eigen::Matrix<Real,3,1> pos(x, y, z);
-    Eigen::Quaternion<Real> ori(qw,qx,qy,qz);
-
-    if (!is_rob_02_attached_)
-    {
-        // tell sim objects (dlo) to attach robot to the nearest particles
-        rob_02_attached_id_ = dlo_.attachNearest(pos);
-        // std::cout << "self.rob_02_attached_id, " << rob_02_attached_id_ << std::endl;
-
-        if (rob_02_attached_id_ != -1)
-        {
-            is_rob_02_attached_ = true;
-        }
-    }
-    else
-    {
-        // tell sim object to update its position
-            dlo_.updateAttachedPose(rob_02_attached_id_, pos, ori);
-    }
-}
-
-void DloSimulator::odometryCb_03(const nav_msgs::Odometry::ConstPtr odom_msg){
-    // // With some kind of self lock to prevent collision with simulation
-    boost::recursive_mutex::scoped_lock lock(mtx_);
-
-    const Real & x = odom_msg->pose.pose.position.x;
-    const Real & y = odom_msg->pose.pose.position.y;
-    const Real & z = odom_msg->pose.pose.position.z + dlo_rob_z_offset_;
-
-    const Real & qw = odom_msg->pose.pose.orientation.w;
-    const Real & qx = odom_msg->pose.pose.orientation.x;
-    const Real & qy = odom_msg->pose.pose.orientation.y;
-    const Real & qz = odom_msg->pose.pose.orientation.z;
-
-    Eigen::Matrix<Real,3,1> pos(x, y, z);
-    Eigen::Quaternion<Real> ori(qw,qx,qy,qz);
-
-    if (!is_rob_03_attached_)
-    {
-        // tell sim objects (dlo) to attach robot to the nearest particles
-        rob_03_attached_id_ = dlo_.attachNearest(pos);
-        // std::cout << "self.rob_03_attached_id, " << rob_03_attached_id_ << std::endl;
-
-        if (rob_03_attached_id_ != -1)
-        {
-            is_rob_03_attached_ = true;
-        }
-    }
-    else
-    {
-        // tell sim object to update its position
-            dlo_.updateAttachedPose(rob_03_attached_id_, pos, ori);
-    }
-}
-
-void DloSimulator::odometryCb_04(const nav_msgs::Odometry::ConstPtr odom_msg){
-    // // With some kind of self lock to prevent collision with simulation
-    boost::recursive_mutex::scoped_lock lock(mtx_);
-
-    const Real & x = odom_msg->pose.pose.position.x;
-    const Real & y = odom_msg->pose.pose.position.y;
-    const Real & z = odom_msg->pose.pose.position.z + dlo_rob_z_offset_;
-
-    const Real & qw = odom_msg->pose.pose.orientation.w;
-    const Real & qx = odom_msg->pose.pose.orientation.x;
-    const Real & qy = odom_msg->pose.pose.orientation.y;
-    const Real & qz = odom_msg->pose.pose.orientation.z;
-    
-    Eigen::Matrix<Real,3,1> pos(x, y, z);
-    Eigen::Quaternion<Real> ori(qw,qx,qy,qz);
-
-    if (!is_rob_04_attached_)
-    {
-        // tell sim objects (dlo) to attach robot to the nearest particles
-        rob_04_attached_id_ = dlo_.attachNearest(pos);
-        // std::cout << "self.rob_04_attached_id, " << rob_04_attached_id_ << std::endl;
-
-        if (rob_04_attached_id_ != -1)
-        {
-            is_rob_04_attached_ = true;
-        }
-    }
-    else
-    {
-        // tell sim object to update its position
-            dlo_.updateAttachedPose(rob_04_attached_id_, pos, ori);
-    }
-}
 
 /*
 void DloSimulator::readAttachedRobotForces(){
@@ -1522,7 +1581,8 @@ void DloSimulator::publishMinDistancesToRigidBodies(const ros::TimerEvent& e){
 
             msg_data.type = minDistData.m_type;
             
-            msg_data.index1 = minDistData.m_index1;
+            // msg_data.index1 = minDistData.m_index1; // index of the particle in dlo
+            msg_data.index1 = 0; // index of the dlo in the scene, when there is single dlo in the simulation, it's always 0.  
             msg_data.index2 = minDistData.m_index2;
 
             msg_data.pointOnObject1.x = minDistData.m_pointOnObject1[0];
@@ -1586,7 +1646,7 @@ void DloSimulator::publishMinDistLineMarkers(
 }
 
 void DloSimulator::setupMinDistLineMarker(visualization_msgs::Marker &marker){
-    marker.header.frame_id = dlo_points_frame_id_;
+    marker.header.frame_id = dlo_frame_id_;
     marker.header.stamp = ros::Time::now();
 
     marker.type = visualization_msgs::Marker::LINE_LIST;
@@ -1600,4 +1660,68 @@ void DloSimulator::setupMinDistLineMarker(visualization_msgs::Marker &marker){
     marker.color.g = min_dist_line_marker_color_rgba_[1];
     marker.color.b = min_dist_line_marker_color_rgba_[2];
     marker.color.a = min_dist_line_marker_color_rgba_[3];
+}
+
+void DloSimulator::publishDloState(const ros::TimerEvent& e){
+    // With some kind of self lock to prevent collision with simulation
+    boost::recursive_mutex::scoped_lock lock(mtx_);
+
+    dlo_simulator_stiff_rods::SegmentStateArray states_msg;
+
+    // Set the dlo_id 
+    states_msg.dlo_id = 0;  // TODO: Replace in future with dlo_id obtaining method
+
+    const std::vector<Eigen::Matrix<Real,3,1>> &pos_ptr = *dlo_.getPosPtr();
+    const std::vector<Eigen::Quaternion<Real>> &ori_ptr = *dlo_.getOriPtr();
+    const Eigen::Matrix<Real,3,Eigen::Dynamic> &vel_ptr = *dlo_.getVelPtr();
+    const Eigen::Matrix<Real,3,Eigen::Dynamic> &ang_vel_ptr = *dlo_.getAngVelPtr();
+    const Eigen::Matrix<Real,3,Eigen::Dynamic> &for_ptr = *dlo_.getForPtr();
+    const Eigen::Matrix<Real,3,Eigen::Dynamic> &tor_ptr = *dlo_.getTorPtr();
+
+    for (size_t i = 0; i < pos_ptr.size(); ++i) {
+        dlo_simulator_stiff_rods::SegmentState segment_state;
+
+        // Set the segment id
+        segment_state.id = i;
+
+        // Set the header
+        segment_state.header.stamp = ros::Time::now();
+        segment_state.header.frame_id = dlo_frame_id_;
+
+        // Set pose position
+        segment_state.pose.position.x = pos_ptr[i](0);
+        segment_state.pose.position.y = pos_ptr[i](1);
+        segment_state.pose.position.z = pos_ptr[i](2);
+
+        // Set pose orientation
+        Eigen::Quaternion<Real> quat = ori_ptr[i];
+        segment_state.pose.orientation.x = quat.x();
+        segment_state.pose.orientation.y = quat.y();
+        segment_state.pose.orientation.z = quat.z();
+        segment_state.pose.orientation.w = quat.w();
+
+        // Set twist (linear and angular velocity)
+        segment_state.twist.linear.x = vel_ptr(0, i);
+        segment_state.twist.linear.y = vel_ptr(1, i);
+        segment_state.twist.linear.z = vel_ptr(2, i);
+
+        segment_state.twist.angular.x = ang_vel_ptr(0, i);
+        segment_state.twist.angular.y = ang_vel_ptr(1, i);
+        segment_state.twist.angular.z = ang_vel_ptr(2, i);
+
+        // Set wrench (force and torque)
+        segment_state.wrench.force.x = for_ptr(0, i);
+        segment_state.wrench.force.y = for_ptr(1, i);
+        segment_state.wrench.force.z = for_ptr(2, i);
+
+        segment_state.wrench.torque.x = tor_ptr(0, i);
+        segment_state.wrench.torque.y = tor_ptr(1, i);
+        segment_state.wrench.torque.z = tor_ptr(2, i);
+
+        // Add the segment state to the message
+        states_msg.states.push_back(segment_state);
+    }
+
+    // Publish the message
+    pub_dlo_state_.publish(states_msg);
 }

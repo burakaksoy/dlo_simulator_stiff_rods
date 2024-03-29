@@ -5,7 +5,7 @@ gravity_z: -9.804 # m/s^2
 
 dt: 0.002 # seconds. Simulated time per iteration of the dlo simulation.
 set_sim_rate_auto: false  # to set the simulation rate and dt automaticall, do not use
-num_substeps: 60 # 40  #40 # Number of substeps per iteration based on 2019 Small Steps XPBD paper.
+num_substeps: 40 # 40  #40 # Number of substeps per iteration based on 2019 Small Steps XPBD paper.
 num_steps: 1 # experimental only. do not change from 1
 
 dlo_l: 3.3528 # 2.25 # 3.3528 # dlo length in meters
@@ -13,7 +13,7 @@ dlo_r: 0.0035 # 0.0035 # 0.0035 # dlo radius in meters
 dlo_density: 1792.89 # dlo mass per meter cube (kg/m^3)
 dlo_num_segments: 40 # max 45 # number of segment in dlo (int)
 
-dlo_zero_stretch_stiffness: 1.0e+6 # 1.0e+14
+dlo_zero_stretch_stiffness: 1.0e+14
 dlo_young_modulus: 30.0e+9 # 30.0e+9 # 3.0e+7 # E, elasticity modulus (unit: Pa?)
 dlo_torsion_modulus: 10.0e+9 # 10.0e+9 # 1.0e+7 # G, Shear modulus in classical phsysics. (unit: Pa?)
 
@@ -26,17 +26,17 @@ use_zero_stretch_stiffness: true
 # and dlo_zero_stretch_stiffness parameter will be used as a scalar multiplier
 
 # Global artificial velocity damping coefficients. Defaults to 0.0. 
-global_damp_coeff_v: 5.9e-3 # 0.0 # 5.9e-1 # 2.1e-4; // 0.9e-3
+global_damp_coeff_v: 5.9e-1 # 0.0 # 5.9e-1 # 2.1e-4; // 0.9e-3
 global_damp_coeff_w: 0.9e-3 # 0.0 # 0.9e-3 # 2.1e-4;
 
 # DLO Initial Transformations (By Default, the dlo is laying in +y-axis to -y-axis direction centered at the origin)
 # initial_height: 0.0 # initial dlo height from ground (m) (Deprecated, use dlo_translation instead)
-dlo_translation: [0.675, 0.0, 2.0] # [0.33, 0.37, 2.2] # [0, 0, 0]
+dlo_translation: [0, 1, 1.5] # [0.675, 0.0, 2.0] # [0.33, 0.37, 2.2] # [0, 0, 0]
 dlo_rotationAxis: [0, 0, 1] # [1, 0, 0]
 dlo_rotationAngle: 1.5708 # 1.508 # 1.5708 # Radians
 # dlo_scale: [1, 1, 1] # NOT USED, use dlo_l and dlo_r parameters instead
 
-custom_static_particles: [0] # [0,27] # specify the particle (segment) ids to set as static
+custom_static_particles: [0,39] # [5,34] # [0,27] # specify the particle (segment) ids to set as static
 # Note: we also create an odom subscriber for each custom static particle to update their poses online.
 # Note: The specified ids must be in range of "dlo_num_segments" parameter.
 
@@ -63,10 +63,10 @@ min_dist_to_rb_pub_rate: 50.0 # Hz, frequency to publish minimum distances to th
 # Rigid body scene .json file, If empty, no rigid bodies exist in the simulator
 rb_scene_config_path: ""
 # rb_scene_config_path: $(find dlo_simulator_stiff_rods)/config/scenes/DloOnCube_5.json
-rb_scene_config_path: $(find dlo_simulator_stiff_rods)/config/scenes/DloOnCylinderUnitBox.json
+# rb_scene_config_path: $(find dlo_simulator_stiff_rods)/config/scenes/DloOnCylinderUnitBox.json
 # rb_scene_config_path: $(find dlo_simulator_stiff_rods)/config/scenes/DloOnCylinderVaseUnitBox.json
 # rb_scene_config_path: $(find dlo_simulator_stiff_rods)/config/scenes/DloOnFloor.json
-# rb_scene_config_path: $(find dlo_simulator_stiff_rods)/config/scenes/TentBuilding.json
+rb_scene_config_path: $(find dlo_simulator_stiff_rods)/config/scenes/TentBuilding.json
 
 
 # DLO VISUALIZATION RELATED PARAMETERS
@@ -88,7 +88,7 @@ rb_visualization_mode: 2 # -1: Disabled, 0: Mesh Only, 1: Wireframe Only, 2: Bot
 # Note that using less data in the visualization helps to save network bandwith
 # for the rigid bodies in the scene, we assume the same frame id as the dlo
 # and we are only publishing the wireframe lines and the mesh (i.e no vertex points)
-rb_line_marker_scale_multiplier: 1.0 # multiplies 5 mm with this scale
+rb_line_marker_scale_multiplier: 0.2 # multiplies 5 mm with this scale
 rb_line_marker_color_rgba: [0.5, 1.0, 0.5, 0.9]
 rb_mesh_marker_color_rgba: [0.0, 0.0, 0.0, 0.5]
 

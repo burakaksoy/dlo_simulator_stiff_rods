@@ -44,6 +44,7 @@ Dlo::Dlo(const MeshDLO &mesh,
     vel_ = Eigen::Matrix<Real,3,Eigen::Dynamic>::Zero(3,num_particles_); // Create a velocity vector of particles filled with zeros 
     for_ = Eigen::Matrix<Real,3,Eigen::Dynamic>::Zero(3,num_particles_);
     inv_mass_.assign(num_particles_, 0.0);
+    is_dynamic_.assign(num_particles_, true); // initially assume all particles are dynamic
 
     // std::cout << "pos_:\n" << pos_ << std::endl;
     // std::cout << "prev_pos_:\n" << prev_pos_ << std::endl;
@@ -188,17 +189,48 @@ void Dlo::setMasses(){
 }
 
 
+void Dlo::changeParticleDynamicity(const int &particle, const bool &is_dynamic){
+    if(particle < 0 || particle >= is_dynamic_.size()) {
+        throw std::out_of_range("Index out of bounds");
+    }
+    if (is_dynamic_[particle] != is_dynamic){
+        is_dynamic_[particle] = is_dynamic;
+
+        if (!is_dynamic){
+            // Update Velocity to Zero when making the particle static
+            updateAttachedVelocity(particle, 
+                                    Eigen::Matrix<Real,3,1>::Zero(), 
+                                    Eigen::Matrix<Real,3,1>::Zero());
+        }
+    }
 }
 
 void Dlo::setStaticParticles(const std::vector<int> &particles){
     for (const int& i : particles)
     {
-        if (inv_mass_[i] != 0.0){
-            inv_mass_[i] = 0.0;
-            inv_iner_[i].setZero();
-            attached_ids_.push_back(i); // add fixed particle id to the attached_ids_ vector               
-        }
+        changeParticleDynamicity(i, false);
     }
+}
+
+void Dlo::setDynamicParticles(const std::vector<int> &particles){
+    for (const int& i : particles)
+    {
+        changeParticleDynamicity(i, true);
+    }
+}
+
+const bool Dlo::isStaticParticle(const int &particle){
+    if(particle < 0 || particle >= is_dynamic_.size()) {
+        throw std::out_of_range("Index out of bounds");
+    }
+    return !is_dynamic_[particle];
+}
+
+const bool Dlo::isDynamicParticle(const int &particle){
+    if(particle < 0 || particle >= is_dynamic_.size()) {
+        throw std::out_of_range("Index out of bounds");
+    }
+    return is_dynamic_[particle];
 }
 
 void Dlo::preSolve(const Real &dt, const Eigen::Matrix<Real,3,1> &gravity){
@@ -208,39 +240,27 @@ void Dlo::preSolve(const Real &dt, const Eigen::Matrix<Real,3,1> &gravity){
         // #pragma omp for schedule(static) 
         #pragma omp parallel for 
         for (int i = 0; i< num_particles_; i++){
-            if (inv_mass_[i] > 0){
+            if (is_dynamic_[i]){
                 vel_.col(i) += gravity*dt;
-                prev_pos_[i] = pos_[i];
-                pos_[i] += vel_.col(i)*dt;
-
-                // // Prevent going below ground
-                // Real z = pos_[i](2);
-                // if (z < 0.){
-                //     pos_[i] = prev_pos_[i] ;
-                //     pos_[i](2) = 0.0;
-                // }
             }
+            prev_pos_[i] = pos_[i];
+            pos_[i] += vel_.col(i)*dt;
         }
 
         // Semi implicit euler (rotation)
         // #pragma omp for schedule(static) 
         #pragma omp parallel for
         for (int i = 0; i< num_quaternions_; i++){
-            // if (!inv_iner_[i].isZero(0)){
-            if (inv_mass_[i]!= 0){
+            if (is_dynamic_[i]){
                 //assume zero external torque.
-                Eigen::Matrix<Real,3,1> torque = Eigen::Matrix<Real,3,1>::Zero(); 
-                
+                Eigen::Matrix<Real,3,1> torque = Eigen::Matrix<Real,3,1>::Zero();    
                 // integration 
                 omega_.col(i) += dt * inv_iner_[i] * (torque - (omega_.col(i).cross(iner_[i]*omega_.col(i))));
-
-                Eigen::Quaternion<Real> angVelQ(0.0, omega_.col(i)(0), omega_.col(i)(1), omega_.col(i)(2));
-
-                prev_ori_[i] = ori_[i];
-                
-                ori_[i].coeffs() += dt * 0.5 * (angVelQ * ori_[i]).coeffs();
-                ori_[i].normalize();
             }
+            prev_ori_[i] = ori_[i];
+            Eigen::Quaternion<Real> angVelQ(0.0, omega_.col(i)(0), omega_.col(i)(1), omega_.col(i)(2));
+            ori_[i].coeffs() += dt * 0.5 * (angVelQ * ori_[i]).coeffs();
+            ori_[i].normalize();
         }
     }
 }
@@ -334,6 +354,9 @@ void Dlo::solveStretchBendTwistConstraints(const Real &dt){
         // inverse masses of these segments
         const Real& invMass0 = inv_mass_[id0];
         const Real& invMass1 = inv_mass_[id1];
+
+        const bool &isDynamic0 = is_dynamic_[id0];
+        const bool &isDynamic1 = is_dynamic_[id1];
 
         // Current positions
         Eigen::Matrix<Real,3,1>& p0 = pos_[id0];
@@ -431,113 +454,107 @@ void Dlo::solveStretchBendTwistConstraints(const Real &dt){
         Eigen::Matrix<Real, 3, 3> & jOmegaG1 = bendingAndTorsionJacobians_[i][1];
         jOmegaG1 = jOmega1*G1;
 
-            // Start actual solving from here -------
-            // compute matrix of the linear equation system (using Equations (25), (26), and (28) in Equation (19))
-            Eigen::Matrix<Real, 6, 6> JMJT; // = Eigen::Matrix<Real, 6, 6>::Zero(); // Initialize place holder for J*M^-1*J^T
+        // Start actual solving from here -------
+        // compute matrix of the linear equation system (using Equations (25), (26), and (28) in Equation (19))
+        Eigen::Matrix<Real, 6, 6> JMJT; // = Eigen::Matrix<Real, 6, 6>::Zero(); // Initialize place holder for J*M^-1*J^T
 
-            // compute stretch block
-            Eigen::Matrix<Real,3,3> K1, K2;
-            computeMatrixK(connector0, invMass0, p0, inertiaInverseW0, K1);
-            computeMatrixK(connector1, invMass1, p1, inertiaInverseW1, K2);
-            JMJT.block<3, 3>(0, 0) = K1 + K2;
+        // compute stretch block
+        Eigen::Matrix<Real,3,3> K1, K2;
+        if (isDynamic0){ computeMatrixK(connector0, invMass0, p0, inertiaInverseW0, K1);}
+        else{K1.setZero();}
+        if (isDynamic1){ computeMatrixK(connector1, invMass1, p1, inertiaInverseW1, K2);}
+        else{K2.setZero();}
+        JMJT.block<3, 3>(0, 0) = K1 + K2;
 
-            // compute coupling blocks
-            const Eigen::Matrix<Real,3,1> ra = connector0 - p0;
-            const Eigen::Matrix<Real,3,1> rb = connector1 - p1;
+        // compute coupling blocks
+        const Eigen::Matrix<Real,3,1> ra = connector0 - p0;
+        const Eigen::Matrix<Real,3,1> rb = connector1 - p1;
 
-            Eigen::Matrix<Real,3,3> ra_crossT, rb_crossT;
-            crossProductMatrix(-ra, ra_crossT); // use -ra to get the transpose
-            crossProductMatrix(-rb, rb_crossT); // use -rb to get the transpose
+        Eigen::Matrix<Real,3,3> ra_crossT, rb_crossT;
+        crossProductMatrix(-ra, ra_crossT); // use -ra to get the transpose
+        crossProductMatrix(-rb, rb_crossT); // use -rb to get the transpose
 
+        Eigen::Matrix<Real,3,3> offdiag(Eigen::Matrix<Real,3,3>::Zero());
+        if (isDynamic0){offdiag = jOmegaG0 * inertiaInverseW0 * ra_crossT * (-1);}
+        if (isDynamic1){offdiag += jOmegaG1 * inertiaInverseW1 * rb_crossT;}
+        JMJT.block<3, 3>(3, 0) = offdiag;
+        JMJT.block<3, 3>(0, 3) = offdiag.transpose();
 
-            Eigen::Matrix<Real,3,3> offdiag(Eigen::Matrix<Real,3,3>::Zero());
-            if (invMass0 != 0.0)
-            {
-                offdiag = jOmegaG0 * inertiaInverseW0 * ra_crossT * (-1);
-            }
+        // compute bending and torsion block
+        Eigen::Matrix<Real,3,3> MInvJT0 = inertiaInverseW0 * jOmegaG0.transpose();
+        Eigen::Matrix<Real,3,3> MInvJT1 = inertiaInverseW1 * jOmegaG1.transpose();
 
-            if (invMass1 != 0.0)
-            {
-                offdiag += jOmegaG1 * inertiaInverseW1 * rb_crossT;
-            }
-            JMJT.block<3, 3>(3, 0) = offdiag;
-            JMJT.block<3, 3>(0, 3) = offdiag.transpose();
+        Eigen::Matrix<Real,3,3> JMJTOmega(Eigen::Matrix<Real,3,3>::Zero());
+        if (isDynamic0){ JMJTOmega = jOmegaG0*MInvJT0;}
+        if (isDynamic1){ JMJTOmega += jOmegaG1*MInvJT1;}
+        JMJT.block<3, 3>(3, 3) = JMJTOmega;
 
-            // compute bending and torsion block
-            Eigen::Matrix<Real,3,3> MInvJT0 = inertiaInverseW0 * jOmegaG0.transpose();
-            Eigen::Matrix<Real,3,3> MInvJT1 = inertiaInverseW1 * jOmegaG1.transpose();
+        // // Multiply each row with compliance times damping divided by dt
+        // JMJT.row(0) *= (1.0 + (stretch_compliance(0)*beta_tilde_shear_stretch(0)/dt)); 
+        // JMJT.row(1) *= (1.0 + (stretch_compliance(1)*beta_tilde_shear_stretch(1)/dt)); 
+        // JMJT.row(2) *= (1.0 + (stretch_compliance(2)*beta_tilde_shear_stretch(2)/dt)); 
+        // JMJT.row(3) *= (1.0 + (bending_and_torsion_compliance(0)*beta_tilde_bending_torsion(0)/dt)); 
+        // JMJT.row(4) *= (1.0 + (bending_and_torsion_compliance(1)*beta_tilde_bending_torsion(1)/dt)); 
+        // JMJT.row(5) *= (1.0 + (bending_and_torsion_compliance(2)*beta_tilde_bending_torsion(2)/dt)); 
 
-            Eigen::Matrix<Real,3,3> JMJTOmega(Eigen::Matrix<Real,3,3>::Zero());
-            if (invMass0 != 0.0)
-            {
-                JMJTOmega = jOmegaG0*MInvJT0;
-            }
+        // add compliance
+        JMJT(0, 0) += stretch_compliance(0);
+        JMJT(1, 1) += stretch_compliance(1);
+        JMJT(2, 2) += stretch_compliance(2);
+        JMJT(3, 3) += bending_and_torsion_compliance(0);
+        JMJT(4, 4) += bending_and_torsion_compliance(1);
+        JMJT(5, 5) += bending_and_torsion_compliance(2);
 
-            if (invMass1 != 0.0)
-            {
-                JMJTOmega += jOmegaG1*MInvJT1;
-            }
-            JMJT.block<3, 3>(3, 3) = JMJTOmega;
+        // // Calculate Jv = J1*v1 + J2*v2 for damping
+        // Eigen::Matrix<Real,6,1> Jv;
 
-            // // Multiply each row with compliance times damping divided by dt
-            // JMJT.row(0) *= (1.0 + (stretch_compliance(0)*beta_tilde_shear_stretch(0)/dt)); 
-            // JMJT.row(1) *= (1.0 + (stretch_compliance(1)*beta_tilde_shear_stretch(1)/dt)); 
-            // JMJT.row(2) *= (1.0 + (stretch_compliance(2)*beta_tilde_shear_stretch(2)/dt)); 
-            // JMJT.row(3) *= (1.0 + (bending_and_torsion_compliance(0)*beta_tilde_bending_torsion(0)/dt)); 
-            // JMJT.row(4) *= (1.0 + (bending_and_torsion_compliance(1)*beta_tilde_bending_torsion(1)/dt)); 
-            // JMJT.row(5) *= (1.0 + (bending_and_torsion_compliance(2)*beta_tilde_bending_torsion(2)/dt)); 
+        // // Current velocities
+        // const Eigen::Matrix<Real,3,1> v0 = (p0 - p0_prev)/dt;
+        // const Eigen::Matrix<Real,3,1> v1 = (p1 - p1_prev)/dt;
 
-            // add compliance
-            JMJT(0, 0) += stretch_compliance(0);
-            JMJT(1, 1) += stretch_compliance(1);
-            JMJT(2, 2) += stretch_compliance(2);
-            JMJT(3, 3) += bending_and_torsion_compliance(0);
-            JMJT(4, 4) += bending_and_torsion_compliance(1);
-            JMJT(5, 5) += bending_and_torsion_compliance(2);
+        // // Current angular velocities
+        // const Eigen::Matrix<Real,3,1> w0 = 2.0*(q0 * q0_prev.conjugate()).vec()/dt;
+        // const Eigen::Matrix<Real,3,1> w1 = 2.0*(q1 * q1_prev.conjugate()).vec()/dt;
 
-            // // Calculate Jv = J1*v1 + J2*v2 for damping
-            // Eigen::Matrix<Real,6,1> Jv;
+        // Jv.block<3,1>(0,0) = v0 - v1 + ra_crossT*w0 - rb_crossT*w1;
+        // Jv.block<3,1>(3,0) = jOmegaG0 * w0 + jOmegaG1 * w1;
 
-            // // Current velocities
-            // const Eigen::Matrix<Real,3,1> v0 = (p0 - p0_prev)/dt;
-            // const Eigen::Matrix<Real,3,1> v1 = (p1 - p1_prev)/dt;
+        // //Update rhs with -alpha_tilde*beta_tilde*Jv
+        // rhs(0) -= stretch_compliance(0)*beta_tilde_shear_stretch(0) * Jv(0); 
+        // rhs(1) -= stretch_compliance(1)*beta_tilde_shear_stretch(1) * Jv(1); 
+        // rhs(2) -= stretch_compliance(2)*beta_tilde_shear_stretch(2) * Jv(2); 
+        // rhs(3) -= bending_and_torsion_compliance(0)*beta_tilde_bending_torsion(0) * Jv(3); 
+        // rhs(4) -= bending_and_torsion_compliance(1)*beta_tilde_bending_torsion(1) * Jv(4); 
+        // rhs(5) -= bending_and_torsion_compliance(2)*beta_tilde_bending_torsion(2) * Jv(5); 
 
-            // // Current angular velocities
-            // const Eigen::Matrix<Real,3,1> w0 = 2.0*(q0 * q0_prev.conjugate()).vec()/dt;
-            // const Eigen::Matrix<Real,3,1> w1 = 2.0*(q1 * q1_prev.conjugate()).vec()/dt;
+        // solve linear equation system (Equation 19)
+        Eigen::Matrix<Real,6,1> deltaLambda = JMJT.ldlt().solve(rhs);
 
-            // Jv.block<3,1>(0,0) = v0 - v1 + ra_crossT*w0 - rb_crossT*w1;
-            // Jv.block<3,1>(3,0) = jOmegaG0 * w0 + jOmegaG1 * w1;
+        // compute position and orientation updates (using Equations (25), (26), and (28) in Equation (20))
+        const Eigen::Matrix<Real,3,1> & deltaLambdaStretch = deltaLambda.block<3, 1>(0, 0);
+        const Eigen::Matrix<Real,3,1> & deltaLambdaBendingAndTorsion = deltaLambda.block<3, 1>(3, 0);
 
-            // //Update rhs with -alpha_tilde*beta_tilde*Jv
-            // rhs(0) -= stretch_compliance(0)*beta_tilde_shear_stretch(0) * Jv(0); 
-            // rhs(1) -= stretch_compliance(1)*beta_tilde_shear_stretch(1) * Jv(1); 
-            // rhs(2) -= stretch_compliance(2)*beta_tilde_shear_stretch(2) * Jv(2); 
-            // rhs(3) -= bending_and_torsion_compliance(0)*beta_tilde_bending_torsion(0) * Jv(3); 
-            // rhs(4) -= bending_and_torsion_compliance(1)*beta_tilde_bending_torsion(1) * Jv(4); 
-            // rhs(5) -= bending_and_torsion_compliance(2)*beta_tilde_bending_torsion(2) * Jv(5); 
+        // Now apply the corrections -----------------------------
+        if (isDynamic0)
+        {
+            p0 += invMass0 * deltaLambdaStretch;
+            q0.coeffs() += G0 * (inertiaInverseW0 * -ra_crossT * deltaLambdaStretch + MInvJT0 * deltaLambdaBendingAndTorsion);
+            q0.normalize();
+        }
 
-            // solve linear equation system (Equation 19)
-            Eigen::Matrix<Real,6,1> deltaLambda = JMJT.ldlt().solve(rhs);
+        if (isDynamic1)
+        {
+            p1 += -invMass1 * deltaLambdaStretch;
+            q1.coeffs() += G1 * (inertiaInverseW1 * rb_crossT * deltaLambdaStretch + MInvJT1 * deltaLambdaBendingAndTorsion);
+            q1.normalize();
+        }
 
-            // compute position and orientation updates (using Equations (25), (26), and (28) in Equation (20))
-            const Eigen::Matrix<Real,3,1> & deltaLambdaStretch = deltaLambda.block<3, 1>(0, 0);
-            const Eigen::Matrix<Real,3,1> & deltaLambdaBendingAndTorsion = deltaLambda.block<3, 1>(3, 0);
+        // Calculate the Force/Torque (Wrench) at each segment ---------------
+        for_.col(id0) += inv_dt_sqr * deltaLambdaStretch;
+        for_.col(id1) += inv_dt_sqr * -deltaLambdaStretch;
 
-            // Now apply the corrections -----------------------------
-            if (invMass0 != 0.)
-            {
-                p0 += invMass0 * deltaLambdaStretch;
-                q0.coeffs() += G0 * (inertiaInverseW0 * -ra_crossT * deltaLambdaStretch + MInvJT0 * deltaLambdaBendingAndTorsion);
-                q0.normalize();
-            }
-
-            if (invMass1 != 0.)
-            {
-                p1 += -invMass1 * deltaLambdaStretch;
-                q1.coeffs() += G1 * (inertiaInverseW1 * rb_crossT * deltaLambdaStretch + MInvJT1 * deltaLambdaBendingAndTorsion);
-                q1.normalize();
-            }
+        tor_.col(id0) += inv_dt_sqr * (-ra_crossT * deltaLambdaStretch + jOmegaG0.transpose() * deltaLambdaBendingAndTorsion);
+        tor_.col(id1) += inv_dt_sqr * ( rb_crossT * deltaLambdaStretch + jOmegaG1.transpose() * deltaLambdaBendingAndTorsion);
     }
 }
 
@@ -578,10 +595,10 @@ void Dlo::computeMatrixK(const Eigen::Matrix<Real,3,1> &connector,
 }
 
 void Dlo::crossProductMatrix(const Eigen::Matrix<Real,3,1> &v, Eigen::Matrix<Real,3,3> &v_hat){
-	v_hat << 0, -v(2), v(1),
-		v(2), 0, -v(0),
-		-v(1), v(0), 0;
-}
+	v_hat <<     0, -v(2),  v(1),
+              v(2),     0, -v(0),
+             -v(1),  v(0),     0;
+    }
 
 void Dlo::postSolve(const Real &dt){
     // Update velocities
@@ -591,7 +608,7 @@ void Dlo::postSolve(const Real &dt){
         // #pragma omp for schedule(static) 
         #pragma omp parallel for 
         for (int i = 0; i< num_particles_; i++){
-            if (inv_mass_[i] != 0){
+            if (is_dynamic_[i]){
                 vel_.col(i) = (pos_[i] - prev_pos_[i])/dt;
             }
         }
@@ -599,8 +616,7 @@ void Dlo::postSolve(const Real &dt){
         // #pragma omp for schedule(static) 
         #pragma omp parallel for 
         for (int i = 0; i< num_quaternions_; i++){
-            // if (!inv_iner_[i].isZero(0)){
-            if (inv_mass_[i]!= 0){
+            if (is_dynamic_[i]){
                 const Eigen::Quaternion<Real> relRot = (ori_[i] * prev_ori_[i].conjugate());
                 omega_.col(i) = (relRot.w() >= 0) ? (2.0*relRot.vec()/dt) : (-2.0*relRot.vec()/dt);
             }
@@ -614,7 +630,7 @@ void Dlo::postSolve(const Real &dt){
         // #pragma omp for schedule(static) 
         #pragma omp parallel for 
         for (int i = 0; i< num_particles_; i++){
-            if (inv_mass_[i] != 0){
+            if (is_dynamic_[i]){
                 vel_.col(i) -= std::min(1.0, (global_damp_coeff_v_/num_particles_)*dt*inv_mass_[i]) * vel_.col(i);
                 // divide damping coeff by num_particles_ to get rid of the segment number dependent damping response
             }
@@ -623,8 +639,7 @@ void Dlo::postSolve(const Real &dt){
         // #pragma omp for schedule(static) 
         #pragma omp parallel for 
         for (int i = 0; i< num_quaternions_; i++){
-            // if (!inv_iner_[i].isZero(0)){
-            if (inv_mass_[i]!= 0){
+            if (is_dynamic_[i]){
                 Eigen::Matrix<Real,3,1> dw = (global_damp_coeff_w_/num_quaternions_)*dt*inv_iner_[i]*omega_.col(i);
                 // divide damping coeff by num_quaternions_ to get rid of the segment number dependent damping response
                 
@@ -638,12 +653,17 @@ void Dlo::postSolve(const Real &dt){
     }
 }
 
-/*
 void Dlo::resetForces(){
     // Also Reset accumulated forces for the next iteration
     for_.setZero();
+    tor_.setZero();
 }
-*/
+
+void Dlo::normalizeForces(const int &num_substeps){
+    // Find the average forces of the timestep during the substep iterations
+    for_ /= num_substeps;
+    tor_ /= num_substeps;
+}
 
 // Find the nearest 3D position vector col id in the given matrix
 int Dlo::findNearestPositionVectorId(const std::vector<Eigen::Matrix<Real,3,1>>& matrix, 
@@ -665,8 +685,7 @@ int Dlo::attachNearest(const Eigen::Matrix<Real,3,1> &pos){
     int id = findNearestPositionVectorId(pos_,pos);
     // Make that particle stationary
     if (id >= 0){
-        inv_mass_[id] = 0.0;
-        attached_ids_.push_back(id); // add fixed particle id to the attached_ids_ vector
+        changeParticleDynamicity(id,false);
     }
     return id;
 }
@@ -676,6 +695,13 @@ void Dlo::updateAttachedPose(const int &id,
                              const Eigen::Quaternion<Real> &ori ){
     pos_[id] = pos;
     ori_[id] = ori;
+}
+
+void Dlo::updateAttachedVelocity(const int &id, 
+                                const Eigen::Matrix<Real,3,1> &vel, 
+                                const Eigen::Matrix<Real,3,1> &omega){
+    vel_.col(id) = vel;
+    omega_.col(id) = omega;
 }
 
 Eigen::Matrix2Xi *Dlo::getStretchBendTwistIdsPtr(){
