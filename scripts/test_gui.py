@@ -654,7 +654,7 @@ class TestGUI(qt_widgets.QWidget):
             # Reset spacenav_twist to zero after timeout
             self.spacenav_twist = Twist()
 
-            rospy.loginfo("spacenav_twist is zeroed because it's been long time since the last msg arrived..")
+            rospy.loginfo_throttle(2.0,"spacenav_twist is zeroed because it's been long time since the last msg arrived..")
 
     def state_array_callback(self, states_msg):
         # Positions
