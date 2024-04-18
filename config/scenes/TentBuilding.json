@@ -18,7 +18,7 @@
 			"comment": "collisionObjectFileName can contain the path of an SDF file or if it is empty, the simulator will generate an SDF using the mesh in the geometryFile",
 			"collisionObjectFileName": "../scenes/Cache/sphere.obj_50_50_50.csdf",
 			"collisionObjectScale": [6.0, 6.0, 0.1],
-			"resolutionSDF": [50,50,50],
+			"resolutionSDF": [60,60,60],
 			"invertSDF": 0
 		},
 		{
