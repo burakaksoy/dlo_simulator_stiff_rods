@@ -237,8 +237,8 @@ void Dlo::preSolve(const Real &dt, const Eigen::Matrix<Real,3,1> &gravity){
     #pragma omp parallel default(shared)
     {
         // Semi implicit euler (position)
-        // #pragma omp for schedule(static) 
-        #pragma omp parallel for 
+        #pragma omp for schedule(static) 
+        // #pragma omp parallel for 
         for (int i = 0; i< num_particles_; i++){
             if (is_dynamic_[i]){
                 vel_.col(i) += gravity*dt;
@@ -248,8 +248,8 @@ void Dlo::preSolve(const Real &dt, const Eigen::Matrix<Real,3,1> &gravity){
         }
 
         // Semi implicit euler (rotation)
-        // #pragma omp for schedule(static) 
-        #pragma omp parallel for
+        #pragma omp for schedule(static) 
+        // #pragma omp parallel for
         for (int i = 0; i< num_quaternions_; i++){
             if (is_dynamic_[i]){
                 //assume zero external torque.
@@ -605,16 +605,16 @@ void Dlo::postSolve(const Real &dt){
     #pragma omp parallel default(shared)
     {
         // Update linear velocities
-        // #pragma omp for schedule(static) 
-        #pragma omp parallel for 
+        #pragma omp for schedule(static) 
+        // #pragma omp parallel for 
         for (int i = 0; i< num_particles_; i++){
             if (is_dynamic_[i]){
                 vel_.col(i) = (pos_[i] - prev_pos_[i])/dt;
             }
         }
         // Update angular velocities
-        // #pragma omp for schedule(static) 
-        #pragma omp parallel for 
+        #pragma omp for schedule(static) 
+        // #pragma omp parallel for 
         for (int i = 0; i< num_quaternions_; i++){
             if (is_dynamic_[i]){
                 const Eigen::Quaternion<Real> relRot = (ori_[i] * prev_ori_[i].conjugate());
@@ -627,8 +627,8 @@ void Dlo::postSolve(const Real &dt){
     #pragma omp parallel default(shared)
     {
         // Damp linear velocities
-        // #pragma omp for schedule(static) 
-        #pragma omp parallel for 
+        #pragma omp for schedule(static) 
+        // #pragma omp parallel for 
         for (int i = 0; i< num_particles_; i++){
             if (is_dynamic_[i]){
                 vel_.col(i) -= std::min(1.0, (global_damp_coeff_v_/num_particles_)*dt*inv_mass_[i]) * vel_.col(i);
@@ -636,8 +636,8 @@ void Dlo::postSolve(const Real &dt){
             }
         }
         // Damp angular velocities
-        // #pragma omp for schedule(static) 
-        #pragma omp parallel for 
+        #pragma omp for schedule(static) 
+        // #pragma omp parallel for 
         for (int i = 0; i< num_quaternions_; i++){
             if (is_dynamic_[i]){
                 Eigen::Matrix<Real,3,1> dw = (global_damp_coeff_w_/num_quaternions_)*dt*inv_iner_[i]*omega_.col(i);

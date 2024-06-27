@@ -1,0 +1,437 @@
+{
+    "Name": "corridor_base_link",
+    "RigidBodies": [
+        {
+            "id": 1,
+            "rotationAxis": [
+                -2.653594666942124e-06,
+                -4.8735987367015545e-12,
+                -0.9999999999964794
+            ],
+            "rotationAngle": 1.5707926535968348,
+            "translation": [
+                2.149997858149169,
+                -1.4499969993553417,
+                1.1999962849658394
+            ],
+            "geometryFile": "/home/burak/catkin_ws_deformable/src/deformable_simulator_scene_utilities/src/deformable_simulator_scene_utilities/meshes/primitives/box.obj",
+            "scale": [
+                2.9,
+                0.1,
+                2.4
+            ],
+            "collisionObjectScale": [
+                2.9,
+                0.1,
+                2.4
+            ],
+            "isDynamic": 0,
+            "density": 1.0,
+            "velocity": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "angularVelocity": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "restitution": 0.0,
+            "frictionStatic": 0.5,
+            "frictionDynamic": 0.5,
+            "comment": "collisionObjectFileName can contain the path of an SDF file or if it is empty, the simulator will generate an SDF using the mesh in the geometryFile",
+            "collisionObjectFileName": "",
+            "resolutionSDF": [
+                50,
+                50,
+                50
+            ],
+            "invertSDF": 0
+        },
+        {
+            "id": 2,
+            "rotationAxis": [
+                0,
+                0,
+                1
+            ],
+            "rotationAngle": 0.0,
+            "translation": [
+                -0.3999999999999999,
+                2.1500000000000004,
+                1.2
+            ],
+            "geometryFile": "/home/burak/catkin_ws_deformable/src/deformable_simulator_scene_utilities/src/deformable_simulator_scene_utilities/meshes/primitives/box.obj",
+            "scale": [
+                5.2,
+                0.1,
+                2.4
+            ],
+            "collisionObjectScale": [
+                5.2,
+                0.1,
+                2.4
+            ],
+            "isDynamic": 0,
+            "density": 1.0,
+            "velocity": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "angularVelocity": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "restitution": 0.0,
+            "frictionStatic": 0.5,
+            "frictionDynamic": 0.5,
+            "comment": "collisionObjectFileName can contain the path of an SDF file or if it is empty, the simulator will generate an SDF using the mesh in the geometryFile",
+            "collisionObjectFileName": "",
+            "resolutionSDF": [
+                50,
+                50,
+                50
+            ],
+            "invertSDF": 0
+        },
+        {
+            "id": 3,
+            "rotationAxis": [
+                -2.653594666942124e-06,
+                -4.8735987367015545e-12,
+                -0.9999999999964794
+            ],
+            "rotationAngle": 1.5707926535968348,
+            "translation": [
+                2.1500000000000004,
+                1.1,
+                1.2
+            ],
+            "geometryFile": "/home/burak/catkin_ws_deformable/src/deformable_simulator_scene_utilities/src/deformable_simulator_scene_utilities/meshes/primitives/box.obj",
+            "scale": [
+                2.2,
+                0.1,
+                2.4
+            ],
+            "collisionObjectScale": [
+                2.2,
+                0.1,
+                2.4
+            ],
+            "isDynamic": 0,
+            "density": 1.0,
+            "velocity": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "angularVelocity": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "restitution": 0.0,
+            "frictionStatic": 0.5,
+            "frictionDynamic": 0.5,
+            "comment": "collisionObjectFileName can contain the path of an SDF file or if it is empty, the simulator will generate an SDF using the mesh in the geometryFile",
+            "collisionObjectFileName": "",
+            "resolutionSDF": [
+                50,
+                50,
+                50
+            ],
+            "invertSDF": 0
+        },
+        {
+            "id": 4,
+            "rotationAxis": [
+                0,
+                0,
+                1
+            ],
+            "rotationAngle": 0.0,
+            "translation": [
+                0.0,
+                0.0,
+                2.45
+            ],
+            "geometryFile": "/home/burak/catkin_ws_deformable/src/deformable_simulator_scene_utilities/src/deformable_simulator_scene_utilities/meshes/primitives/box.obj",
+            "scale": [
+                6.0,
+                6.0,
+                0.1
+            ],
+            "collisionObjectScale": [
+                6.0,
+                6.0,
+                0.1
+            ],
+            "isDynamic": 0,
+            "density": 1.0,
+            "velocity": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "angularVelocity": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "restitution": 0.0,
+            "frictionStatic": 0.5,
+            "frictionDynamic": 0.5,
+            "comment": "collisionObjectFileName can contain the path of an SDF file or if it is empty, the simulator will generate an SDF using the mesh in the geometryFile",
+            "collisionObjectFileName": "",
+            "resolutionSDF": [
+                50,
+                50,
+                50
+            ],
+            "invertSDF": 0
+        },
+        {
+            "id": 5,
+            "rotationAxis": [
+                0,
+                0,
+                1
+            ],
+            "rotationAngle": 0.0,
+            "translation": [
+                0.0,
+                0.0,
+                -0.05
+            ],
+            "geometryFile": "/home/burak/catkin_ws_deformable/src/deformable_simulator_scene_utilities/src/deformable_simulator_scene_utilities/meshes/primitives/box.obj",
+            "scale": [
+                6.0,
+                6.0,
+                0.1
+            ],
+            "collisionObjectScale": [
+                6.0,
+                6.0,
+                0.1
+            ],
+            "isDynamic": 0,
+            "density": 1.0,
+            "velocity": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "angularVelocity": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "restitution": 0.0,
+            "frictionStatic": 0.5,
+            "frictionDynamic": 0.5,
+            "comment": "collisionObjectFileName can contain the path of an SDF file or if it is empty, the simulator will generate an SDF using the mesh in the geometryFile",
+            "collisionObjectFileName": "",
+            "resolutionSDF": [
+                50,
+                50,
+                50
+            ],
+            "invertSDF": 0
+        },
+        {
+            "id": 6,
+            "rotationAxis": [
+                -2.653594666942124e-06,
+                -4.8735987367015545e-12,
+                -0.9999999999964794
+            ],
+            "rotationAngle": 1.5707926535968348,
+            "translation": [
+                2.949997674488914,
+                -1.499996999355855,
+                1.1999961522863498
+            ],
+            "geometryFile": "/home/burak/catkin_ws_deformable/src/deformable_simulator_scene_utilities/src/deformable_simulator_scene_utilities/meshes/primitives/box.obj",
+            "scale": [
+                3.0,
+                0.1,
+                2.4
+            ],
+            "collisionObjectScale": [
+                3.0,
+                0.1,
+                2.4
+            ],
+            "isDynamic": 0,
+            "density": 1.0,
+            "velocity": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "angularVelocity": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "restitution": 0.0,
+            "frictionStatic": 0.5,
+            "frictionDynamic": 0.5,
+            "comment": "collisionObjectFileName can contain the path of an SDF file or if it is empty, the simulator will generate an SDF using the mesh in the geometryFile",
+            "collisionObjectFileName": "",
+            "resolutionSDF": [
+                50,
+                50,
+                50
+            ],
+            "invertSDF": 0
+        },
+        {
+            "id": 7,
+            "rotationAxis": [
+                -2.6535946670227595e-06,
+                -4.873635802082545e-12,
+                -0.9999999999964794
+            ],
+            "rotationAngle": 3.1415853071936697,
+            "translation": [
+                3.0006666009718685e-06,
+                -2.95000783527525,
+                1.2000078280814406
+            ],
+            "geometryFile": "/home/burak/catkin_ws_deformable/src/deformable_simulator_scene_utilities/src/deformable_simulator_scene_utilities/meshes/primitives/box.obj",
+            "scale": [
+                6.0,
+                0.1,
+                2.4
+            ],
+            "collisionObjectScale": [
+                6.0,
+                0.1,
+                2.4
+            ],
+            "isDynamic": 0,
+            "density": 1.0,
+            "velocity": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "angularVelocity": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "restitution": 0.0,
+            "frictionStatic": 0.5,
+            "frictionDynamic": 0.5,
+            "comment": "collisionObjectFileName can contain the path of an SDF file or if it is empty, the simulator will generate an SDF using the mesh in the geometryFile",
+            "collisionObjectFileName": "",
+            "resolutionSDF": [
+                50,
+                50,
+                50
+            ],
+            "invertSDF": 0
+        },
+        {
+            "id": 8,
+            "rotationAxis": [
+                0,
+                0,
+                1
+            ],
+            "rotationAngle": 0.0,
+            "translation": [
+                0.0,
+                2.95,
+                1.2
+            ],
+            "geometryFile": "/home/burak/catkin_ws_deformable/src/deformable_simulator_scene_utilities/src/deformable_simulator_scene_utilities/meshes/primitives/box.obj",
+            "scale": [
+                6.0,
+                0.1,
+                2.4
+            ],
+            "collisionObjectScale": [
+                6.0,
+                0.1,
+                2.4
+            ],
+            "isDynamic": 0,
+            "density": 1.0,
+            "velocity": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "angularVelocity": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "restitution": 0.0,
+            "frictionStatic": 0.5,
+            "frictionDynamic": 0.5,
+            "comment": "collisionObjectFileName can contain the path of an SDF file or if it is empty, the simulator will generate an SDF using the mesh in the geometryFile",
+            "collisionObjectFileName": "",
+            "resolutionSDF": [
+                50,
+                50,
+                50
+            ],
+            "invertSDF": 0
+        },
+        {
+            "id": 9,
+            "rotationAxis": [
+                -2.653594666942124e-06,
+                -4.8735987367015545e-12,
+                -0.9999999999964794
+            ],
+            "rotationAngle": 1.5707926535968348,
+            "translation": [
+                2.95,
+                1.5,
+                1.2
+            ],
+            "geometryFile": "/home/burak/catkin_ws_deformable/src/deformable_simulator_scene_utilities/src/deformable_simulator_scene_utilities/meshes/primitives/box.obj",
+            "scale": [
+                3.0,
+                0.1,
+                2.4
+            ],
+            "collisionObjectScale": [
+                3.0,
+                0.1,
+                2.4
+            ],
+            "isDynamic": 0,
+            "density": 1.0,
+            "velocity": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "angularVelocity": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "restitution": 0.0,
+            "frictionStatic": 0.5,
+            "frictionDynamic": 0.5,
+            "comment": "collisionObjectFileName can contain the path of an SDF file or if it is empty, the simulator will generate an SDF using the mesh in the geometryFile",
+            "collisionObjectFileName": "",
+            "resolutionSDF": [
+                50,
+                50,
+                50
+            ],
+            "invertSDF": 0
+        }
+    ]
+}

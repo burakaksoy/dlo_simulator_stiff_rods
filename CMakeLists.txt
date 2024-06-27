@@ -170,7 +170,8 @@ catkin_package(
     message_runtime 
     ${MSG_DEPS} 
  DEPENDS 
-    EIGEN3 # OpenMP, maybe?
+    EIGEN3 
+    OpenMP # maybe not?
 )
 
 ###########
@@ -203,6 +204,9 @@ add_library(dlo_simulator_stiff_rods
     src/dlo_simulator_stiff_rods/utilities/collision_handler.cpp
     src/dlo_simulator_stiff_rods/utilities/BoundingSphereHierarchy.cpp
 )   
+
+# target_compile_options(dlo_simulator_stiff_rods PRIVATE ${OpenMP_FLAGS})
+
 target_link_libraries(dlo_simulator_stiff_rods 
     ${catkin_LIBRARIES} 
     ${Boost_LIBRARIES} 
