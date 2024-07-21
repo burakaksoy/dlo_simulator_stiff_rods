@@ -1,0 +1,149 @@
+{
+    "Name": "ground_plane",
+    "RigidBodies": [
+        {
+            "id": 1,
+            "rotationAxis": [
+                0,
+                0,
+                1
+            ],
+            "rotationAngle": 0.0,
+            "translation": [
+                0.0,
+                0.0,
+                -0.005
+            ],
+            "geometryFile": "/home/burak/catkin_ws_deformable/src/deformable_simulator_scene_utilities/src/deformable_simulator_scene_utilities/meshes/primitives/box.obj",
+            "scale": [
+                1.0,
+                1.0,
+                0.01
+            ],
+            "collisionObjectScale": [
+                1.0,
+                1.0,
+                0.01
+            ],
+            "isDynamic": 0,
+            "density": 1.0,
+            "velocity": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "angularVelocity": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "restitution": 0.0,
+            "frictionStatic": 0.5,
+            "frictionDynamic": 0.5,
+            "comment": "collisionObjectFileName can contain the path of an SDF file or if it is empty, the simulator will generate an SDF using the mesh in the geometryFile",
+            "collisionObjectFileName": "",
+            "resolutionSDF": [
+                50,
+                50,
+                50
+            ],
+            "invertSDF": 0
+        },
+        {
+            "id": 2,
+            "rotationAxis": [
+                0,
+                0,
+                1
+            ],
+            "rotationAngle": 0.0,
+            "translation": [
+                0.0,
+                -0.1,
+                0.2
+            ],
+            "geometryFile": "/home/burak/catkin_ws_deformable/src/deformable_simulator_scene_utilities/src/deformable_simulator_scene_utilities/meshes/primitives/box.obj",
+            "scale": [
+                0.06,
+                0.06,
+                0.4
+            ],
+            "collisionObjectScale": [
+                0.06,
+                0.06,
+                0.4
+            ],
+            "isDynamic": 0,
+            "density": 1.0,
+            "velocity": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "angularVelocity": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "restitution": 0.0,
+            "frictionStatic": 0.5,
+            "frictionDynamic": 0.5,
+            "comment": "collisionObjectFileName can contain the path of an SDF file or if it is empty, the simulator will generate an SDF using the mesh in the geometryFile",
+            "collisionObjectFileName": "",
+            "resolutionSDF": [
+                50,
+                50,
+                50
+            ],
+            "invertSDF": 0
+        },
+        {
+            "id": 3,
+            "rotationAxis": [
+                0,
+                0,
+                1
+            ],
+            "rotationAngle": 0.0,
+            "translation": [
+                0.0,
+                0.1,
+                0.2
+            ],
+            "geometryFile": "/home/burak/catkin_ws_deformable/src/deformable_simulator_scene_utilities/src/deformable_simulator_scene_utilities/meshes/primitives/box.obj",
+            "scale": [
+                0.06,
+                0.06,
+                0.4
+            ],
+            "collisionObjectScale": [
+                0.06,
+                0.06,
+                0.4
+            ],
+            "isDynamic": 0,
+            "density": 1.0,
+            "velocity": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "angularVelocity": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "restitution": 0.0,
+            "frictionStatic": 0.5,
+            "frictionDynamic": 0.5,
+            "comment": "collisionObjectFileName can contain the path of an SDF file or if it is empty, the simulator will generate an SDF using the mesh in the geometryFile",
+            "collisionObjectFileName": "",
+            "resolutionSDF": [
+                50,
+                50,
+                50
+            ],
+            "invertSDF": 0
+        }
+    ]
+}
