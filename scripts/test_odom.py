@@ -18,8 +18,8 @@ def publish_odometry():
     # position = Point(-1, 0, 2)
     # orientation = Quaternion(0, 0.7071081, 0, 0.7071055)
     
-    position = Point(0.48, -0.08, 0.3)
-    position2 = Point(0, -0.08, 0.3)
+    position = Point(0.24, -0.08, 0.3)
+    position2 = Point(-0.24, -0.08, 0.3)
     
     th_x, th_y,th_z = np.deg2rad([90, 0, -110])
     th_x2, th_y2,th_z2 = np.deg2rad([90, 0, -70])
