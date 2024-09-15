@@ -24,7 +24,7 @@ from std_srvs.srv import SetBool, SetBoolRequest
 from std_srvs.srv import Empty, EmptyResponse
 
 import math
-import tf.transformations as transformations
+import tf.transformations as tf_trans
 
 """
 Author: Burak Aksoy
@@ -318,7 +318,7 @@ class TestGUI(qt_widgets.QWidget):
             self.text_inputs_pos[particle]['z'].setText(self.format_number(pos.z,digits=3)) 
 
             # Convert quaternion orientation to RPY (Roll-pitch-yaw) Euler Angles (degrees)
-            rpy = np.rad2deg(transformations.euler_from_quaternion([ori.x,ori.y,ori.z,ori.w]))
+            rpy = np.rad2deg(tf_trans.euler_from_quaternion([ori.x,ori.y,ori.z,ori.w]))
 
             # Fill the orientation text  inputs with the current RPY orientation
             self.text_inputs_ori[particle]['x'].setText(self.format_number(rpy[0],digits=1))
@@ -327,7 +327,7 @@ class TestGUI(qt_widgets.QWidget):
         else:
             rospy.logwarn(f"Key '{particle}' not found in the particle_positions and particle_orientations dictionaries.")
 
-    def set_position_cb(self, particle):
+    def set_position_cb_basic(self, particle):
         pose = Pose()
         pose.position.x = float(self.text_inputs_pos[particle]['x'].text())
         pose.position.y = float(self.text_inputs_pos[particle]['y'].text())
@@ -347,8 +347,32 @@ class TestGUI(qt_widgets.QWidget):
         odom.pose.pose = pose
 
         self.odom_publishers[particle].publish(odom)
+    
+    def set_position_cb(self, particle):
+        if particle not in self.particle_positions:
+            return
+        
+        # Current pose of the particle
+        current_position = self.particle_positions[particle]
+        current_orientation = self.particle_orientations[particle]  # Assuming quaternion
+        
+        # Target pose of the particle
+        pose = Pose()
+        pose.position.x = float(self.text_inputs_pos[particle]['x'].text())
+        pose.position.y = float(self.text_inputs_pos[particle]['y'].text())
+        pose.position.z = float(self.text_inputs_pos[particle]['z'].text())
 
-    def set_orientation_cb(self,particle):
+        # Keep the same orientation
+        pose.orientation = self.particle_orientations[particle]
+
+        target_position = pose.position
+        target_orientation = pose.orientation  # Assuming quaternion
+        
+        # Send the particle to the target pose
+        self.send_to_target_poses(current_position, current_orientation,
+                                    target_position, target_orientation, particle)
+        
+    def set_orientation_cb_basic(self,particle):
         pose = Pose()
 
         # Keep the same position
@@ -359,7 +383,7 @@ class TestGUI(qt_widgets.QWidget):
         th_y = np.deg2rad(float(self.text_inputs_ori[particle]['y'].text())) # rad
         th_z = np.deg2rad(float(self.text_inputs_ori[particle]['z'].text())) # rad
 
-        q = transformations.quaternion_from_euler(th_x, th_y,th_z)
+        q = tf_trans.quaternion_from_euler(th_x, th_y,th_z)
         pose.orientation.x = q[0]
         pose.orientation.y = q[1]
         pose.orientation.z = q[2]
@@ -376,6 +400,375 @@ class TestGUI(qt_widgets.QWidget):
         odom.pose.pose = pose
 
         self.odom_publishers[particle].publish(odom)
+
+    def set_orientation_cb(self,particle):
+        if particle not in self.particle_positions:
+            return
+        
+        # Current pose of the particle
+        current_position = self.particle_positions[particle]
+        current_orientation = self.particle_orientations[particle]  # Assuming quaternion
+        
+        pose = Pose()
+        pose.position = self.particle_positions[particle] # Keep the same position
+        # Update the orientation with RPY degree input
+        th_x = np.deg2rad(float(self.text_inputs_ori[particle]['x'].text())) # rad
+        th_y = np.deg2rad(float(self.text_inputs_ori[particle]['y'].text())) # rad
+        th_z = np.deg2rad(float(self.text_inputs_ori[particle]['z'].text())) # rad
+
+        q = tf_trans.quaternion_from_euler(th_x, th_y,th_z)
+        pose.orientation.x = q[0]
+        pose.orientation.y = q[1]
+        pose.orientation.z = q[2]
+        pose.orientation.w = q[3]
+        
+        target_position = pose.position
+        target_orientation = pose.orientation  # Assuming quaternion
+
+        # Send the particle to the target pose
+        self.send_to_target_poses(current_position, current_orientation,
+                                    target_position, target_orientation, particle)
+
+    # ----------------------------------------------------------------------------------    
+    def send_to_target_poses(self, current_position, current_orientation,
+                                    target_position, target_orientation, particle,
+                                    v_max=3.0, a_max=1.0, alpha_max=6.0, omega_max=1.0,
+                                    rate=100, speedup=1.0):
+        # Gradually change the position and orientation of the particles 
+        # to the target pose (self.planned_path_current_target_poses_of_particles[particle]) 
+        # based on a trapezoidal velocity profile described with
+        # given self.a_max, self.v_max, self.alpha_max, self.omega_max
+        
+        rate = rospy.Rate(rate)  # Control frequency
+
+        # Initialize variables
+        max_time = 0
+        acc_time = 0 # desired acceleration time
+        velocity_profiles = {}
+        
+        # Compute 3D distance and orientation difference as angle (based on axis-angle representation)
+        segment_distance, segment_direction = self.compute_distance(current_position, target_position)  # 3D distance
+        segment_rotation, segment_rot_axis = self.compute_orientation_difference_axis_angle(current_orientation, target_orientation)
+
+        # Compute trapezoidal profile for position and orientation
+        t_pos, t_pos_acc = self.compute_min_time_needed_with_trapezoidal_profile(segment_distance, a_max*speedup, v_max*speedup)
+        t_ori, t_ori_acc = self.compute_min_time_needed_with_trapezoidal_profile(segment_rotation, alpha_max*speedup, omega_max*speedup)
+
+        # Store velocity profile components
+        velocity_profiles[particle] = {
+            't_tot': 0.0,  # Total time (placeholder)
+            't_a_p': 0.0,  # position acceleration duration (placeholder), assumed same as deceleration duration
+            't_a_o': 0.0,  # orientation acceleration duration (placeholder), assumed same as deceleration duration
+            'a_p': 0.0,  # position acceleration (placeholder)
+            'a_o': 0.0,  # orientation acceleration (placeholder)
+            'd_p': segment_distance,  # 3D distance to the target
+            'd_o': segment_rotation,  # Orientation difference (angle in radians)
+            'dir_p': segment_direction,  # Unit Vector to target position (zeros vector if d_p=0)
+            'dir_o': segment_rot_axis,  # Unit Axis orientation vector (unit vector in z direction if d_o=0)
+            'start_p': current_position,  # Starting position (Point)
+            'start_o': current_orientation,  # Starting orientation (Quaternion)
+            'target_p': target_position,  # Target position (Point)
+            'target_o': target_orientation,  # Target orientation (Quaternion)
+        }
+
+        # Find the maximum time needed across all particles and corresponding acceleration times
+        # max_time = max(max_time, t_pos, t_ori)
+        if t_pos > max_time:
+            max_time = t_pos
+            acc_time = t_pos_acc
+        if t_ori > max_time:
+            max_time = t_ori
+            acc_time = t_ori_acc
+            
+        # print(velocity_profiles[particle])
+
+        # Re-iterate to update the total time needed for each particle
+        # and to update the velocity profiles
+        for particle, profile in velocity_profiles.items():
+            velocity_profiles[particle]['t_tot'] = max_time
+            
+            # Find the acceleration time for position and orientation based on the max time and the desired acceleration time
+            if profile['d_p'] > 0.0:
+                a_p, t_a_p = self.compute_fixed_time_trapezoidal_profile_params(max_time, acc_time, profile['d_p'], a_max*speedup, v_max*speedup)
+            else:
+                a_p = 0.0
+                t_a_p = 0.0
+            
+            if profile['d_o'] > 0.0:
+                a_o, t_a_o = self.compute_fixed_time_trapezoidal_profile_params(max_time, acc_time, profile['d_o'], alpha_max*speedup, omega_max*speedup)
+            else:
+                a_o = 0.0
+                t_a_o = 0.0
+            
+            # Update the velocity profiles
+            velocity_profiles[particle]['t_a_p'] = t_a_p
+            velocity_profiles[particle]['t_a_o'] = t_a_o
+            velocity_profiles[particle]['a_p'] = a_p
+            velocity_profiles[particle]['a_o'] = a_o
+        
+        # Main loop to update particles simultaneously
+        start_time = rospy.Time.now().to_sec()
+        while not rospy.is_shutdown():
+            current_time = rospy.Time.now().to_sec()
+            elapsed_time = current_time - start_time
+
+            for particle, profile in velocity_profiles.items():
+                if particle not in self.particle_positions:
+                    continue
+
+                # Update position and orientation based on trapezoidal profile
+                new_position = self.compute_position_from_trapezoidal_profile(profile, elapsed_time)
+                new_orientation = self.compute_orientation_from_trapezoidal_profile(profile, elapsed_time)
+
+                # Compute twist (linear and angular velocity) for the particle
+                linear_velocity = self.compute_linear_velocity_from_profile(profile, elapsed_time)
+                angular_velocity = self.compute_angular_velocity_from_profile(profile, elapsed_time)
+
+                # Prepare odometry message
+                odom = Odometry()
+                odom.header.stamp = rospy.Time.now()
+                odom.header.frame_id = "map"
+                
+                odom.pose.pose.position = new_position
+                odom.pose.pose.orientation = new_orientation
+                
+                odom.twist.twist.linear.x = linear_velocity[0]
+                odom.twist.twist.linear.y = linear_velocity[1]
+                odom.twist.twist.linear.z = linear_velocity[2]
+                odom.twist.twist.angular.x = angular_velocity[0]
+                odom.twist.twist.angular.y = angular_velocity[1]
+                odom.twist.twist.angular.z = angular_velocity[2]
+
+                # Publish odometry and twist
+                self.odom_publishers[particle].publish(odom)
+
+            if elapsed_time > max_time:
+                break  # Stop if all particles have completed their movements
+        
+            rate.sleep()  # Maintain the control loop rate
+    
+    def compute_distance(self, current_position, target_position):
+        # Compute 3D distance between two points
+        vec = np.array([target_position.x - current_position.x, target_position.y - current_position.y, target_position.z - current_position.z])
+        dist = np.linalg.norm(vec)
+        
+        if dist > 0.0:
+            return dist, vec
+        else:
+            return 0.0, np.zeros_like(vec)
+    
+    def compute_orientation_difference_axis_angle(self, current_orientation, target_orientation):
+        current_orientation = [current_orientation.x, current_orientation.y, current_orientation.z, current_orientation.w]
+        target_orientation = [target_orientation.x, target_orientation.y, target_orientation.z, target_orientation.w]
+        
+        # Relative rotation quaternion from current to target
+        quaternion_error = tf_trans.quaternion_multiply(target_orientation, tf_trans.quaternion_inverse(current_orientation))
+
+        # Normalize the quaternion to avoid numerical issues
+        quaternion_error = self.normalize_quaternion(quaternion_error)
+
+        # AXIS-ANGLE ORIENTATION ERROR/DIFFERENCE DEFINITION
+        # Convert quaternion difference to rotation vector (axis-angle representation)
+        rotation_vector = self.quaternion_to_rotation_vec(quaternion_error)
+        
+        angle = np.linalg.norm(rotation_vector)
+        
+        if angle > 0.0:
+            axis = rotation_vector / angle
+        else:
+            axis = np.array([0.0, 0.0, 1.0])
+            
+        return angle, axis
+
+    def quaternion_to_rotation_vec(self, quaternion):
+        """
+        Converts a quaternion to axis-angle representation.
+        Minimal representation of the orientation error. (3,) vector.
+        Arguments:
+            quaternion: The quaternion to convert as a numpy array in the form [x, y, z, w].
+        Returns:
+            rotation_vector: Minimal axis-angle representation of the orientation error. (3,) vector.
+            Norm if the axis_angle is the angle of rotation.
+        """
+        angle = 2 * np.arccos(quaternion[3])
+
+        # Handling small angles with an approximation
+        small_angle_threshold = 1e-6
+        if np.abs(angle) < small_angle_threshold:
+            # Use small angle approximation
+            rotation_vector = np.array([0.,0.,0.])
+            
+            # # Also calculate the representation Jacobian inverse
+            # J_inv = np.eye((3,3))
+        else:
+            # Regular calculation for larger angles
+            axis = quaternion[:3] / np.sin(angle/2.0)
+            # Normalize the axis
+            axis = axis / np.linalg.norm(axis)
+            rotation_vector = angle * axis 
+            
+            # # Also calculate the representation Jacobian inverse
+            # k_hat = self.hat(axis)
+            # cot = 1.0 / np.tan(angle/2.0)
+            # J = -angle/2.0 * (k_hat + cot*(k_hat @ k_hat)) + np.outer(axis, axis)
+            # J_inv = np.linalg.inv(J)
+            
+        return rotation_vector # , J_inv
+
+    def normalize_quaternion(self, quaternion):
+        norm = np.linalg.norm(quaternion)
+        if norm == 0:
+            raise ValueError("Cannot normalize a quaternion with zero norm.")
+        return quaternion / norm
+
+    def compute_min_time_needed_with_trapezoidal_profile(self, delta, a_max, v_max):
+        # Check if it's a full trapezoidal profile or triangular profile
+        if (v_max ** 2) / a_max < delta:  # Full trapezoidal profile
+            t_acc = v_max / a_max
+            t_const = (delta - (v_max ** 2) / a_max) / v_max
+            t_total = 2 * t_acc + t_const
+        else:  # Triangular profile (cannot reach max velocity)
+            t_acc = np.sqrt(delta / a_max)
+            t_total = 2 * t_acc
+            t_const = 0
+
+        # Return total needed time and the acceleration time
+        return t_total, t_acc
+
+    def compute_fixed_time_trapezoidal_profile_params(self, t_total, t_acc_d, delta, a_max, v_max):
+        """ Calculate the trapezoidal profile parameters (acc and t_acc) for a known 
+            time duration and distance (delta) of the profile, given the max acceleration and velocity.
+            Assuming the acceleration and deceleration times are the same.
+            Assuming the acceleration values are fixed with values either acc, -acc, or 0,
+            which is needed for Trapezoidal velocity profile.
+            
+        """
+        acc = delta / (t_acc_d*(t_total - t_acc_d))
+        
+        EPSILON = 1e-9  # Set a small threshold for precision errors
+
+        if acc <= a_max + EPSILON and acc * t_acc_d <= v_max + EPSILON:
+            return acc, t_acc_d
+        else:
+            # Find the closest valid acceleration and acceleration time
+            t_acc = self.find_closest_t_acc(x0=t_acc_d, 
+                                            a=-t_total, 
+                                            b=-delta/a_max, 
+                                            c=t_total - delta/v_max, 
+                                            d=t_total/2)
+            acc = delta / (t_acc*(t_total - t_acc)) 
+            return acc, t_acc
+            
+    def find_closest_t_acc(self, x0, a, b, c, d):
+        # Solve the quadratic inequality x^2 + ax <= b
+        # Find the roots of x^2 + ax - b = 0
+        discriminant = a**2 + 4*b
+        
+        if discriminant < 0:
+            rospy.logwarn(f"Discriminant = {discriminant} < 0. No real solution for the quadratic inequality.")
+
+        root1 = (-a + np.sqrt(discriminant)) / 2
+        root2 = (-a - np.sqrt(discriminant)) / 2
+
+        # The solution for x^2 + ax <= b is between the roots root1 and root2
+        lower_bound = min(root1, root2)
+        upper_bound = max(root1, root2)
+
+        # Now, intersect with other constraints: x <= c, 0 < x <= d
+        feasible_lower_bound = max(0, lower_bound)
+        feasible_upper_bound = min(upper_bound, c, d)
+
+        # Check if the feasible region is valid
+        if feasible_lower_bound >= feasible_upper_bound:
+            raise ValueError("No feasible solution due to constraints.")
+
+        # Now find the value of x in the feasible region that is closest to x0
+        if x0 < feasible_lower_bound:
+            return feasible_lower_bound
+        elif x0 > feasible_upper_bound:
+            return feasible_upper_bound
+        else:
+            return x0
+
+    def compute_linear_velocity_from_profile(self, profile, elapsed_time):
+        if elapsed_time >= profile['t_tot']:
+            return np.zeros(3)  # Stop if time exceeds
+        v_norm =  self.v_from_trap_vel_profile(t=elapsed_time, a=profile['a_p'], t_acc=profile['t_a_p'], t_total=profile['t_tot'])
+        v_dir = profile['dir_p']
+        return v_norm * v_dir
+
+    def compute_angular_velocity_from_profile(self, profile, elapsed_time):
+        if elapsed_time >= profile['t_tot']:
+            return np.zeros(3)  # Stop if time exceeds
+        w_norm = self.v_from_trap_vel_profile(t=elapsed_time, a=profile['a_o'], t_acc=profile['t_a_o'], t_total=profile['t_tot'])
+        w_dir = profile['dir_o']
+        return w_norm * w_dir
+    
+    def compute_position_from_trapezoidal_profile(self, profile, elapsed_time):
+        if elapsed_time >= profile['t_tot']:
+            return profile['target_p']
+
+        start_position = np.array([profile['start_p'].x, profile['start_p'].y, profile['start_p'].z])
+
+        # Compute the distance moved based on the trapezoidal velocity profile
+        p = self.p_from_trap_vel_profile(t=elapsed_time, a=profile['a_p'], t_acc=profile['t_a_p'], t_total=profile['t_tot'], delta=profile['d_p'])        
+        if profile['d_p'] > 0.0:
+            new_position = start_position +  profile['dir_p']*(p/profile['d_p'])
+        else:
+            new_position = start_position
+
+        return Point(x=new_position[0], y=new_position[1], z=new_position[2])
+
+    def compute_orientation_from_trapezoidal_profile(self, profile, elapsed_time):
+        if elapsed_time >= profile['t_tot']:
+            return profile['target_o']
+
+        # Compute rotated angle on the trapezoidal velocity profile
+        p = self.p_from_trap_vel_profile(elapsed_time, a=profile['a_o'], t_acc=profile['t_a_o'], t_total=profile['t_tot'], delta=profile['d_o'])
+        
+        # Compute the new orientation
+        new_orientation = self.apply_axis_angle_rotation(profile['start_o'], profile['dir_o'], p)
+        
+        return Quaternion(x=new_orientation[0], y=new_orientation[1], z=new_orientation[2], w=new_orientation[3])
+
+    def p_from_trap_vel_profile(self, t, a, t_acc, t_total, delta):
+        if t >= t_total:
+            return delta
+        
+        if t < t_acc:  # Acceleration phase
+            return 0.5 * a * t**2
+        elif t < t_total - t_acc:  # Constant velocity phase
+            return (0.5 * a*t_acc**2) + (a*t_acc) * (t - t_acc)
+        else:  # Deceleration phase
+            return delta - 0.5*a*(t_total - t)**2
+
+    def v_from_trap_vel_profile(self, t, a, t_acc, t_total):
+        # t: current time
+        # a: acceleration
+        # t_acc: time to reach max velocity
+        # t_total: total time of the profile    
+        
+        if t >= t_total:
+            return 0.0
+        
+        if t < t_acc:  # Acceleration phase
+            return a*t
+        elif t < t_total - t_acc:  # Constant velocity phase
+            return a*t_acc
+        else:  # Deceleration phase
+            return a*t_acc - a*(t - (t_total-t_acc))    
+    
+    def apply_axis_angle_rotation(self, start_orientation, axis, angle):
+        # Convert the start orientation to a numpy array
+        start_quat = [start_orientation.x, start_orientation.y, start_orientation.z, start_orientation.w]
+
+        delta_orientation = tf_trans.quaternion_about_axis(angle, axis)
+        
+        # Apply the rotation to the start orientation
+        new_orientation = tf_trans.quaternion_multiply(delta_orientation, start_quat)
+        return new_orientation
+    # ----------------------------------------------------------------------------------
+    
 
     def reset_position_cb(self, particle):
         # Call reset positions service
@@ -407,14 +800,14 @@ class TestGUI(qt_widgets.QWidget):
                 ori_binded_world = self.particle_orientations[particle] # Quaternion() msg of ROS geometry_msgs
 
                 # Convert quaternions to rotation matrices
-                rotation_matrix_leader = transformations.quaternion_matrix([ori_leader.x, ori_leader.y, ori_leader.z, ori_leader.w])
+                rotation_matrix_leader = tf_trans.quaternion_matrix([ori_leader.x, ori_leader.y, ori_leader.z, ori_leader.w])
 
                 # Calculate the relative position of the binded particle in the leader's frame
                 relative_pos = np.dot(rotation_matrix_leader.T, np.array([pos_binded_world.x - pos_leader.x, pos_binded_world.y - pos_leader.y, pos_binded_world.z - pos_leader.z, 1]))[:3]
 
                 # Calculate the relative orientation of the binded particle in the leader's frame
-                inv_ori_leader = transformations.quaternion_inverse([ori_leader.x, ori_leader.y, ori_leader.z, ori_leader.w])
-                relative_ori = transformations.quaternion_multiply(inv_ori_leader, [ori_binded_world.x, ori_binded_world.y, ori_binded_world.z, ori_binded_world.w])
+                inv_ori_leader = tf_trans.quaternion_inverse([ori_leader.x, ori_leader.y, ori_leader.z, ori_leader.w])
+                relative_ori = tf_trans.quaternion_multiply(inv_ori_leader, [ori_binded_world.x, ori_binded_world.y, ori_binded_world.z, ori_binded_world.w])
 
                 # Store the relative position and orientation
                 pose = Pose()
@@ -515,7 +908,7 @@ class TestGUI(qt_widgets.QWidget):
 
                 if omega_magnitude > 1e-9:  # Avoid division by zero
                     # Create the delta quaternion based on world frame twist
-                    delta_quat = transformations.quaternion_about_axis(omega_magnitude * dt, [
+                    delta_quat = tf_trans.quaternion_about_axis(omega_magnitude * dt, [
                         self.spacenav_twist.angular.x / omega_magnitude,
                         self.spacenav_twist.angular.y / omega_magnitude,
                         self.spacenav_twist.angular.z / omega_magnitude
@@ -530,7 +923,7 @@ class TestGUI(qt_widgets.QWidget):
                         pose.orientation.w
                     )
                     
-                    new_quaternion = transformations.quaternion_multiply(delta_quat, current_quaternion)
+                    new_quaternion = tf_trans.quaternion_multiply(delta_quat, current_quaternion)
                     
                     pose.orientation.x = new_quaternion[0]
                     pose.orientation.y = new_quaternion[1]
@@ -569,13 +962,13 @@ class TestGUI(qt_widgets.QWidget):
                     ori_binded_in_leader = self.binded_relative_poses[particle].orientation # Quaternion() msg of ROS geometry_msgs
 
                     # Convert quaternions to rotation matrices
-                    rotation_matrix_leader = transformations.quaternion_matrix([ori_leader.x, ori_leader.y, ori_leader.z, ori_leader.w])
+                    rotation_matrix_leader = tf_trans.quaternion_matrix([ori_leader.x, ori_leader.y, ori_leader.z, ori_leader.w])
 
                     # Calculate the position of the binded particle in the world frame
                     pos_binded_in_world = np.dot(rotation_matrix_leader, np.array([pos_binded_in_leader.x, pos_binded_in_leader.y, pos_binded_in_leader.z, 1]))[:3] + np.array([pos_leader.x, pos_leader.y, pos_leader.z])
 
                     # Calculate the orientation of the binded particle in the world frame
-                    ori_binded_in_world = transformations.quaternion_multiply([ori_leader.x, ori_leader.y, ori_leader.z, ori_leader.w], [ori_binded_in_leader.x, ori_binded_in_leader.y, ori_binded_in_leader.z, ori_binded_in_leader.w])
+                    ori_binded_in_world = tf_trans.quaternion_multiply([ori_leader.x, ori_leader.y, ori_leader.z, ori_leader.w], [ori_binded_in_leader.x, ori_binded_in_leader.y, ori_binded_in_leader.z, ori_binded_in_leader.w])
 
                     # Now publish the binded particle's pose as an odom msg
                     pose = Pose()
