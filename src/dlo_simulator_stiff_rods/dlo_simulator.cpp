@@ -253,6 +253,13 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
     nh_local_.param<std::string>("change_particle_dynamicity_topic_name", change_particle_dynamicity_topic_name_, std::string("change_particle_dynamicity"));
     nh_local_.param<std::string>("set_particle_dynamicity_service_name", set_particle_dynamicity_service_name_, std::string("set_particle_dynamicity"));
 
+    nh_local_.param<std::string>("set_dlo_young_modulus_service_name", set_dlo_young_modulus_service_name_, std::string("set_dlo_young_modulus"));
+    nh_local_.param<std::string>("set_dlo_torsion_modulus_service_name", set_dlo_torsion_modulus_service_name_, std::string("set_dlo_torsion_modulus"));
+    nh_local_.param<std::string>("get_dlo_young_modulus_service_name", get_dlo_young_modulus_service_name_, std::string("get_dlo_young_modulus"));
+    nh_local_.param<std::string>("get_dlo_torsion_modulus_service_name", get_dlo_torsion_modulus_service_name_, std::string("get_dlo_torsion_modulus"));
+    nh_local_.param<std::string>("change_dlo_young_modulus_topic_name", change_dlo_young_modulus_topic_name_, std::string("change_dlo_young_modulus"));
+    nh_local_.param<std::string>("change_dlo_torsion_modulus_topic_name", change_dlo_torsion_modulus_topic_name_, std::string("change_dlo_torsion_modulus"));
+
     nh_local_.param<Real>("rb_line_marker_scale_multiplier", rb_line_marker_scale_multiplier_, 1.0);
     
     nh_local_.param("rb_line_marker_color_rgba", rb_line_marker_color_rgba_, std::vector<Real>({0.0, 0.0, 1.0, 1.0}));
@@ -552,6 +559,16 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
                                                             &DloSimulator::changeParticleDynamicityCb, 
                                                             this);
 
+            sub_change_young_modulus_ = nh_.subscribe(change_dlo_young_modulus_topic_name_, 
+                                                        1, 
+                                                        &DloSimulator::changeYoungModulusCb, 
+                                                        this);
+
+            sub_change_torsion_modulus_ = nh_.subscribe(change_dlo_torsion_modulus_topic_name_,
+                                                        1,
+                                                        &DloSimulator::changeTorsionModulusCb,
+                                                        this);                                                        
+
             /*
             // Create publishers
             pub_wrench_stamped_01_ = nh_.advertise<geometry_msgs::WrenchStamped>(wrench_01_topic_name_, 1);
@@ -569,6 +586,18 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
             // Create Services
             set_particle_dynamicity_srv_ = nh_local_.advertiseService(set_particle_dynamicity_service_name_, 
                                                                     &DloSimulator::setParticleDynamicityCallback, this);
+
+            set_young_modulus_srv_ = nh_local_.advertiseService(set_dlo_young_modulus_service_name_,
+                                                                    &DloSimulator::setDloYoungModulusCallback, this);
+
+            set_torsion_modulus_srv_ = nh_local_.advertiseService(set_dlo_torsion_modulus_service_name_,
+                                                                    &DloSimulator::setDloTorsionModulusCallback, this);
+
+            get_young_modulus_srv_ = nh_local_.advertiseService(get_dlo_young_modulus_service_name_,
+                                                                    &DloSimulator::getDloYoungModulusCallback, this);
+
+            get_torsion_modulus_srv_ = nh_local_.advertiseService(get_dlo_torsion_modulus_service_name_,
+                                                                    &DloSimulator::getDloTorsionModulusCallback, this);
 
             // Start timers
             timer_simulate_.start();
@@ -589,6 +618,9 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
 
             // Stop subscribers
             sub_change_particle_dynamicity_.shutdown();
+
+            sub_change_young_modulus_.shutdown();
+            sub_change_torsion_modulus_.shutdown();
 
             // Iterate through the map and shut down each subscriber
             for (auto& kv : custom_static_particles_odom_subscribers_) {
@@ -792,6 +824,42 @@ void DloSimulator::changeParticleDynamicityCb(const dlo_simulator_stiff_rods::Ch
             custom_static_particles_cmd_vel_subscribers_[particle_id] = sub; // Add the new subscriber to the map
         }
     }
+}
+
+void DloSimulator::changeYoungModulusCb(const std_msgs::Float32::ConstPtr msg){
+    Real young_modulus = msg->data;
+    dlo_.setYoungModulus(young_modulus);
+}
+
+void DloSimulator::changeTorsionModulusCb(const std_msgs::Float32::ConstPtr msg){
+    Real torsion_modulus = msg->data;
+    dlo_.setTorsionModulus(torsion_modulus);
+}
+
+// Create setYoungModulus service callback
+bool DloSimulator::setDloYoungModulusCallback(dlo_simulator_stiff_rods::SetDloYoungModulus::Request &req, dlo_simulator_stiff_rods::SetDloYoungModulus::Response &res) {
+    dlo_.setYoungModulus(req.young_modulus);
+    res.success = true;
+    return true;
+}
+
+// Create setTorsionModulus service callback
+bool DloSimulator::setDloTorsionModulusCallback(dlo_simulator_stiff_rods::SetDloTorsionModulus::Request &req, dlo_simulator_stiff_rods::SetDloTorsionModulus::Response &res) {
+    dlo_.setTorsionModulus(req.torsion_modulus);
+    res.success = true;
+    return true;
+}
+
+// Create getYoungModulus service callback
+bool DloSimulator::getDloYoungModulusCallback(dlo_simulator_stiff_rods::GetDloYoungModulus::Request &req, dlo_simulator_stiff_rods::GetDloYoungModulus::Response &res) {
+    res.young_modulus = dlo_.getYoungModulus();
+    return true;
+}
+
+// Create getTorsionModulus service callback
+bool DloSimulator::getDloTorsionModulusCallback(dlo_simulator_stiff_rods::GetDloTorsionModulus::Request &req, dlo_simulator_stiff_rods::GetDloTorsionModulus::Response &res) {
+    res.torsion_modulus = dlo_.getTorsionModulus();
+    return true;
 }
 
 pbd_object::MeshDLO DloSimulator::createMeshDLO(const std::string &name, 
@@ -1067,7 +1135,8 @@ void DloSimulator::simulate(const ros::TimerEvent& e){
     time_frames_ += 1;
     if (time_frames_ > 100) {
         time_sum_ /= time_frames_;
-        ROS_INFO("[Dlo Simulator]: %-4.2lf ms per simulation iteration", time_sum_*1000);
+        // ROS_INFO("[Dlo Simulator]: %-4.2lf ms per simulation iteration", time_sum_*1000);
+        ROS_INFO_THROTTLE(5, "[Dlo Simulator]: %-4.2lf ms per simulation iteration", time_sum_*1000);
         // Smart dt and simulation rate selection (debug)
         if (!is_auto_sim_rate_set_ && set_sim_rate_auto_) {
             dt_ = time_sum_;

@@ -73,6 +73,7 @@
         "variant": "cpp",
         "bit": "cpp",
         "regex": "cpp",
-        "future": "cpp"
+        "future": "cpp",
+        "forward_list": "cpp"
     }
 }

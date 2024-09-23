@@ -23,6 +23,10 @@
 
 #include <std_srvs/Empty.h>
 #include <dlo_simulator_stiff_rods/SetParticleDynamicity.h> // service
+#include <dlo_simulator_stiff_rods/SetDloYoungModulus.h> // service
+#include <dlo_simulator_stiff_rods/GetDloYoungModulus.h> // service
+#include <dlo_simulator_stiff_rods/SetDloTorsionModulus.h> // service
+#include <dlo_simulator_stiff_rods/GetDloTorsionModulus.h> // service
 
 #include <time.h>
 #include <math.h>
@@ -135,6 +139,9 @@ private:
     // Change Dynamicity callback function
     void changeParticleDynamicityCb(const dlo_simulator_stiff_rods::ChangeParticleDynamicity::ConstPtr change_particle_dynamicity_msg);
 
+    // Change Young Modulus and Torsion Modulus callback functions
+    void changeYoungModulusCb(const std_msgs::Float32::ConstPtr young_modulus_msg);
+    void changeTorsionModulusCb(const std_msgs::Float32::ConstPtr torsion_modulus_msg);
     
     // Service functions
     bool updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res);
@@ -143,6 +150,18 @@ private:
                                 
     bool setParticleDynamicityCallback(dlo_simulator_stiff_rods::SetParticleDynamicity::Request &req,
                                        dlo_simulator_stiff_rods::SetParticleDynamicity::Response &res);
+
+    // Create setYoungModulus service callback and setTorsionModulus service callback
+    bool setDloYoungModulusCallback(dlo_simulator_stiff_rods::SetDloYoungModulus::Request &req,
+                                    dlo_simulator_stiff_rods::SetDloYoungModulus::Response &res);
+    bool setDloTorsionModulusCallback(dlo_simulator_stiff_rods::SetDloTorsionModulus::Request &req,
+                                        dlo_simulator_stiff_rods::SetDloTorsionModulus::Response &res);
+
+    // Create getYoungModulus service callback and getTorsionModulus service callback
+    bool getDloYoungModulusCallback(dlo_simulator_stiff_rods::GetDloYoungModulus::Request &req,
+                                    dlo_simulator_stiff_rods::GetDloYoungModulus::Response &res);
+    bool getDloTorsionModulusCallback(dlo_simulator_stiff_rods::GetDloTorsionModulus::Request &req,
+                                        dlo_simulator_stiff_rods::GetDloTorsionModulus::Response &res);
 
     // ROS variables---------------------------------
     ros::NodeHandle nh_;
@@ -167,6 +186,13 @@ private:
 
     ros::Subscriber sub_change_particle_dynamicity_;
     ros::ServiceServer set_particle_dynamicity_srv_;
+
+    ros::Subscriber sub_change_young_modulus_;
+    ros::Subscriber sub_change_torsion_modulus_;
+    ros::ServiceServer set_young_modulus_srv_;
+    ros::ServiceServer set_torsion_modulus_srv_;
+    ros::ServiceServer get_young_modulus_srv_;
+    ros::ServiceServer get_torsion_modulus_srv_;
 
     // Map to hold particle ID and its corresponding subscriber
     std::map<int, ros::Subscriber> custom_static_particles_odom_subscribers_;
@@ -262,6 +288,13 @@ private:
 
     std::string change_particle_dynamicity_topic_name_;
     std::string set_particle_dynamicity_service_name_;
+
+    std::string set_dlo_young_modulus_service_name_;
+    std::string set_dlo_torsion_modulus_service_name_;
+    std::string get_dlo_young_modulus_service_name_;
+    std::string get_dlo_torsion_modulus_service_name_;
+    std::string change_dlo_young_modulus_topic_name_;
+    std::string change_dlo_torsion_modulus_topic_name_;
 
     // Dlo visualization parameters 
     Real point_marker_scale_;

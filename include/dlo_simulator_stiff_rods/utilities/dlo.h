@@ -121,6 +121,12 @@ public:
     
     const bool isStaticParticle(const int &particle);
     const bool isDynamicParticle(const int &particle);
+
+    void setYoungModulus(const Real &young_modulus);
+    void setTorsionModulus(const Real &torsion_modulus);
+
+    const Real getYoungModulus();
+    const Real getTorsionModulus();
     
     int attachNearest(const Eigen::Matrix<Real,3,1> &pos);
     void updateAttachedPose(const int &id, 

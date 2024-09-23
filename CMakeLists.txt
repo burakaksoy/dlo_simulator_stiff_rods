@@ -130,6 +130,10 @@ add_message_files(
 add_service_files(
   FILES
   SetParticleDynamicity.srv
+  SetDloYoungModulus.srv
+  GetDloYoungModulus.srv
+  SetDloTorsionModulus.srv
+  GetDloTorsionModulus.srv
 )
 
 ## Generate actions in the 'action' folder

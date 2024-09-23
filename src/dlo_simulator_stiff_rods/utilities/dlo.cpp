@@ -233,6 +233,22 @@ const bool Dlo::isDynamicParticle(const int &particle){
     return is_dynamic_[particle];
 }
 
+void Dlo::setYoungModulus(const Real &young_modulus){
+    young_modulus_ = young_modulus;
+}
+
+void Dlo::setTorsionModulus(const Real &torsion_modulus){
+    torsion_modulus_ = torsion_modulus;
+}
+
+const Real Dlo::getYoungModulus(){
+    return young_modulus_;
+}
+
+const Real Dlo::getTorsionModulus(){
+    return torsion_modulus_;
+}
+
 void Dlo::preSolve(const Real &dt, const Eigen::Matrix<Real,3,1> &gravity){
     #pragma omp parallel default(shared)
     {
