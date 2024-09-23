@@ -18,10 +18,10 @@ from visualization_msgs.msg import Marker
 from dlo_simulator_stiff_rods.msg import SegmentStateArray
 from dlo_simulator_stiff_rods.msg import ChangeParticleDynamicity
 
-from dlo_simulator_stiff_rods.srv import SetParticleDynamicity, SetParticleDynamicityRequest
+from dlo_simulator_stiff_rods.srv import GetDloYoungModulus
+from dlo_simulator_stiff_rods.srv import GetDloTorsionModulus
 
-from std_srvs.srv import SetBool, SetBoolRequest
-from std_srvs.srv import Empty, EmptyResponse
+from std_msgs.msg import Float32
 
 import math
 import tf.transformations as tf_trans
@@ -37,7 +37,7 @@ individual particles.
 """
 
 # Velocity commands will only be considered if they are spaced closer than MAX_TIMESTEP
-MAX_TIMESTEP = 0.04 # Set it to ~ twice of pub rate odom
+MAX_TIMESTEP = 0.04  # Set it to ~ twice of pub rate odom
 
 class TestGUI(qt_widgets.QWidget):
     def __init__(self):
@@ -48,16 +48,15 @@ class TestGUI(qt_widgets.QWidget):
 
         self.initial_values_set = False  # Initialization state variable
 
-        self.particles = [] # All particles that is union of controllable and uncontrollable particles
-        self.binded_particles = [] # particles that are uncontrollable and binded to the leader frame,
-        # (e.g human hand held points when the neck joint is the leader)
+        self.particles = []  # All particles that is union of controllable and uncontrollable particles
+        self.binded_particles = []  # Particles that are uncontrollable and binded to the leader frame
 
         self.odom_topic_prefix = None
         self.cmd_vel_topic_prefix = None
         self.odom_topic_leader = None
         # simulator_node_name = "/dlo_simulator_stiff_rods_node"
         simulator_node_name = ""
-        while (not self.particles):
+        while not self.particles:
             try:
                 self.particles = rospy.get_param(simulator_node_name + "/custom_static_particles")
                 self.odom_topic_prefix = rospy.get_param(simulator_node_name + "/custom_static_particles_odom_topic_prefix")
@@ -78,43 +77,72 @@ class TestGUI(qt_widgets.QWidget):
 
         self.initialize_leader_position()
 
-        self.binded_relative_poses = {} # stores Pose() msg of ROS geometry_msgs (Pose.position and Pose.orientation)
+        # Stores Pose() msg of ROS geometry_msgs (Pose.position and Pose.orientation)
+        self.binded_relative_poses = {}
+
+        # Service clients and publishers for modulus values
+        # self.initialize_modulus_services_and_publishers(simulator_node_name)
+        self.initialize_modulus_services_and_publishers(simulator_node_name="/dlo_simulator")
 
         self.createUI()
-        
-        self.spacenav_twist = Twist() # set it to an empty twist message
-        self.last_spacenav_twist_time = rospy.Time.now() # for timestamping of the last twist msg
-        # self.spacenav_twist_wait_timeout = rospy.Duration(2.0*(1.0/self.pub_rate_odom)) # timeout duration to wait twist msg before zeroing in seconds
-        self.spacenav_twist_wait_timeout = rospy.Duration(1.0) # timeout duration to wait twist msg before zeroing in seconds
 
+        self.spacenav_twist = Twist()  # Set it to an empty twist message
+        self.last_spacenav_twist_time = rospy.Time.now()  # For timestamping of the last twist msg
+        self.spacenav_twist_wait_timeout = rospy.Duration(1.0)  # Timeout duration to wait twist msg before zeroing in seconds
 
         self.sub_twist = rospy.Subscriber("/spacenav/twist", Twist, self.spacenav_twist_callback, queue_size=1)
         self.sub_state_array = rospy.Subscriber("/dlo_state", SegmentStateArray, self.state_array_callback, queue_size=1)
 
-        self.pub_change_dynamicity = rospy.Publisher("/change_particle_dynamicity", ChangeParticleDynamicity , queue_size=1)
+        self.pub_change_dynamicity = rospy.Publisher("/change_particle_dynamicity", ChangeParticleDynamicity, queue_size=1)
 
         self.last_timestep_requests = {}
 
         self.odom_pub_timer = rospy.Timer(rospy.Duration(1. / self.pub_rate_odom), self.odom_pub_timer_callback)
-        
+
+    def initialize_modulus_services_and_publishers(self, simulator_node_name=""):
+        # Service clients
+        self.get_young_modulus_service_name = simulator_node_name + "/get_dlo_young_modulus"
+        self.get_torsion_modulus_service_name = simulator_node_name + "/get_dlo_torsion_modulus"
+
+        # Wait for services to be available
+        print("Waiting for services...")
+        rospy.wait_for_service(self.get_young_modulus_service_name)
+        rospy.wait_for_service(self.get_torsion_modulus_service_name)
+        print("Services are available.")
+
+        self.get_young_modulus_service_client = rospy.ServiceProxy(self.get_young_modulus_service_name, GetDloYoungModulus)
+        self.get_torsion_modulus_service_client = rospy.ServiceProxy(self.get_torsion_modulus_service_name, GetDloTorsionModulus)
+
+        # Publishers
+        self.change_young_modulus_publisher = rospy.Publisher("/change_dlo_young_modulus", Float32, queue_size=1)
+        self.change_torsion_modulus_publisher = rospy.Publisher("/change_dlo_torsion_modulus", Float32, queue_size=1)
 
     def createUI(self):
         self.layout = qt_widgets.QVBoxLayout(self)
 
-        self.buttons_manual = {} # To enable/disable manual control
-        self.start_controller_buttons = {} # for leader particle only, (Yes, there is only one leader always but for the sake of generality this is a dictionary)
-        self.bind_to_leader_buttons = {} # for binded particles
+        self.buttons_manual = {}  # To enable/disable manual control
+        self.start_controller_buttons = {}  # For leader particle only
+        self.bind_to_leader_buttons = {}  # For binded particles
 
-        self.text_inputs_pos = {} # to manually set x y z positions of the particles
-        self.text_inputs_ori = {} # to manually set x y z orientations of the particles (Euler RPY, degree input)
+        self.text_inputs_pos = {}  # To manually set x y z positions of the particles
+        self.text_inputs_ori = {}  # To manually set x y z orientations of the particles (Euler RPY, degree input)
+
+        # Add modulus controls at the top
+        self.add_modulus_controls()
+        
+        # Add a horizontal line here
+        h_line = qt_widgets.QFrame()
+        h_line.setFrameShape(qt_widgets.QFrame.HLine)
+        h_line.setFrameShadow(qt_widgets.QFrame.Sunken)
+        self.layout.addWidget(h_line)  # Assuming 'self.layout' is your main layout
         
         # Combine the lists with boundary markers
         combined_particles = (["leader"] + ["_boundary_marker_"] +
-                            self.binded_particles + ["_boundary_marker_"])
+                              self.binded_particles + ["_boundary_marker_"])
 
         # Create rows for the (custom static) particles and the leader
         for particle in combined_particles:
-            # insert a horizontal line between each list (["leader"], self.binded_particles)
+            # Insert a horizontal line between each list (["leader"], self.binded_particles)
             if particle == "_boundary_marker_":
                 # Add a horizontal line here
                 h_line = qt_widgets.QFrame()
@@ -131,7 +159,7 @@ class TestGUI(qt_widgets.QWidget):
             manual_control_button.setCheckable(True)  # Enables toggle behavior
             manual_control_button.setChecked(False)
             manual_control_button.clicked.connect(lambda _, p=particle: self.manual_control_button_pressed_cb(p))
-            row_layout.addWidget(manual_control_button) # Add button to row layout
+            row_layout.addWidget(manual_control_button)  # Add button to row layout
 
             self.buttons_manual[particle] = manual_control_button
 
@@ -169,12 +197,11 @@ class TestGUI(qt_widgets.QWidget):
                     line_edit.setText(str(0.0))
                 elif axis == 'z':
                     line_edit.setText(str(0.0))
-                
+
                 row_layout.addWidget(label)
                 row_layout.addWidget(line_edit)
                 self.text_inputs_pos[particle][axis] = line_edit
-            
-            
+
             # Create Set Position button
             set_pos_button = qt_widgets.QPushButton()
             set_pos_button.setText("Set Position")
@@ -201,7 +228,7 @@ class TestGUI(qt_widgets.QWidget):
                     line_edit.setText(str(0.0))
                 elif axis == 'z':
                     line_edit.setText(str(0.0))
-                
+
                 row_layout.addWidget(label)
                 row_layout.addWidget(line_edit)
                 self.text_inputs_ori[particle][axis] = line_edit
@@ -220,35 +247,31 @@ class TestGUI(qt_widgets.QWidget):
             row_layout.addWidget(separator)
             # ------------------------------------------------
 
-
             # Create Pause Controller Button or Enable Disable Particle Button
             if particle == "leader":
                 start_controller_button = qt_widgets.QPushButton()
                 start_controller_button.setText("Start Controller")
-                # start_controller_button.clicked.connect(lambda _, p=particle: self.start_controller_button_cb(p))
-                # start_controller_button.setCheckable(True) # Set the pause button as checkable
                 start_controller_button.setEnabled(False)  # Disable the button
                 row_layout.addWidget(start_controller_button)
 
-                self.start_controller_buttons[particle] = start_controller_button            
+                self.start_controller_buttons[particle] = start_controller_button
             if particle in self.binded_particles:
                 bind_to_leader_button = qt_widgets.QPushButton()
                 bind_to_leader_button.setText("Bind to Leader")
                 bind_to_leader_button.clicked.connect(lambda _, p=particle: self.bind_to_leader_button_cb(p))
-                bind_to_leader_button.setCheckable(True) # Set the pause button as checkable
+                bind_to_leader_button.setCheckable(True)  # Set the pause button as checkable
 
                 row_layout.addWidget(bind_to_leader_button)
 
-                self.bind_to_leader_buttons[particle] = bind_to_leader_button            
-
+                self.bind_to_leader_buttons[particle] = bind_to_leader_button
 
             # Create Reset DLO positions button
-            if particle in self.binded_particles: 
+            if particle in self.binded_particles:
                 reset_button = qt_widgets.QPushButton()
                 reset_button.setText("Reset Controller Position")
                 reset_button.setEnabled(False)  # Disable the button
                 row_layout.addWidget(reset_button)
-            else: # Leader particle
+            else:  # Leader particle
                 # Send leader particle to the centroid of the particles
                 send_to_centroid_button = qt_widgets.QPushButton()
                 send_to_centroid_button.setText("Center Leader Frame")
@@ -256,34 +279,139 @@ class TestGUI(qt_widgets.QWidget):
                 row_layout.addWidget(send_to_centroid_button)
 
             # Create Make Dynamic Button
-            if particle in self.binded_particles: 
+            if particle in self.binded_particles:
                 make_dynamic_button = qt_widgets.QPushButton()
                 make_dynamic_button.setText("Make Dynamic")
-                make_dynamic_button.clicked.connect(lambda _, p=particle: self.change_dynamicity_cb(p,True))
-                row_layout.addWidget(make_dynamic_button)            
-            
+                make_dynamic_button.clicked.connect(lambda _, p=particle: self.change_dynamicity_cb(p, True))
+                row_layout.addWidget(make_dynamic_button)
+
             # Create Make Static Button
-            if particle in self.binded_particles: 
+            if particle in self.binded_particles:
                 make_static_button = qt_widgets.QPushButton()
                 make_static_button.setText("Make Static")
-                make_static_button.clicked.connect(lambda _, p=particle: self.change_dynamicity_cb(p,False))
-                row_layout.addWidget(make_static_button)            
+                make_static_button.clicked.connect(lambda _, p=particle: self.change_dynamicity_cb(p, False))
+                row_layout.addWidget(make_static_button)
 
             # Add row layout to the main layout
             self.layout.addLayout(row_layout)
-            
+
             if particle == "leader":
                 self.odom_publishers[particle] = rospy.Publisher(self.odom_topic_leader, Odometry, queue_size=1)
             else:
                 self.odom_publishers[particle] = rospy.Publisher(self.odom_topic_prefix + str(particle), Odometry, queue_size=1)
 
             if particle in self.binded_particles:
-                self.info_binded_pose_publishers[particle] = rospy.Publisher( "fake_odom_publisher_gui_info_"+str(particle)+"_target_pose", Marker, queue_size=1)
+                self.info_binded_pose_publishers[particle] = rospy.Publisher("fake_odom_publisher_gui_info_" + str(particle) + "_target_pose", Marker, queue_size=1)
 
         self.setLayout(self.layout)
 
         self.shutdown_timer.timeout.connect(self.check_shutdown)
         self.shutdown_timer.start(1000)  # Timer triggers every 1000 ms (1 second)
+
+    def add_modulus_controls(self):
+        # Create a horizontal layout for the Modulus controls
+        modulus_layout = qt_widgets.QHBoxLayout()
+
+        # Create 'Get Young Modulus' button
+        get_young_modulus_button = qt_widgets.QPushButton()
+        get_young_modulus_button.setText("Get Young Modulus")
+        get_young_modulus_button.clicked.connect(self.get_young_modulus_button_pressed_cb)
+        modulus_layout.addWidget(get_young_modulus_button)
+
+        # Create text field for displaying Young Modulus with label
+        young_modulus_label = qt_widgets.QLabel("Young Modulus:")
+        modulus_layout.addWidget(young_modulus_label)
+
+        self.young_modulus_text_input = qt_widgets.QLineEdit()
+        self.young_modulus_text_input.setPlaceholderText("Young Modulus")
+        self.young_modulus_text_input.setMinimumWidth(100)
+        modulus_layout.addWidget(self.young_modulus_text_input)
+
+        # Create 'Set Young Modulus' button
+        set_young_modulus_button = qt_widgets.QPushButton()
+        set_young_modulus_button.setText("Set Young Modulus")
+        set_young_modulus_button.clicked.connect(self.set_young_modulus_button_pressed_cb)
+        modulus_layout.addWidget(set_young_modulus_button)
+
+        # Separator
+        separator = qt_widgets.QFrame()
+        separator.setFrameShape(qt_widgets.QFrame.VLine)
+        separator.setFrameShadow(qt_widgets.QFrame.Sunken)
+        modulus_layout.addWidget(separator)
+
+        # Create 'Get Torsion Modulus' button
+        get_torsion_modulus_button = qt_widgets.QPushButton()
+        get_torsion_modulus_button.setText("Get Torsion Modulus")
+        get_torsion_modulus_button.clicked.connect(self.get_torsion_modulus_button_pressed_cb)
+        modulus_layout.addWidget(get_torsion_modulus_button)
+
+        # Create text field for displaying Torsion Modulus with label
+        torsion_modulus_label = qt_widgets.QLabel("Torsion Modulus:")
+        modulus_layout.addWidget(torsion_modulus_label)
+
+        self.torsion_modulus_text_input = qt_widgets.QLineEdit()
+        self.torsion_modulus_text_input.setPlaceholderText("Torsion Modulus")
+        self.torsion_modulus_text_input.setMinimumWidth(100)
+        modulus_layout.addWidget(self.torsion_modulus_text_input)
+
+        # Create 'Set Torsion Modulus' button
+        set_torsion_modulus_button = qt_widgets.QPushButton()
+        set_torsion_modulus_button.setText("Set Torsion Modulus")
+        set_torsion_modulus_button.clicked.connect(self.set_torsion_modulus_button_pressed_cb)
+        modulus_layout.addWidget(set_torsion_modulus_button)
+        
+        
+
+        # Add the modulus_layout to the main layout at the top
+        self.layout.addLayout(modulus_layout)
+
+    def get_young_modulus_button_pressed_cb(self):
+        try:
+            # Call the get_young_modulus service
+            response = self.get_young_modulus_service_client()
+            young_modulus = response.young_modulus
+            # Set the value in the text input
+            self.young_modulus_text_input.setText(str(young_modulus))
+        except rospy.ServiceException as e:
+            rospy.logerr("Service call to get_dlo_young_modulus failed: %s", e)
+
+    def get_torsion_modulus_button_pressed_cb(self):
+        try:
+            # Call the get_torsion_modulus service
+            response = self.get_torsion_modulus_service_client()
+            torsion_modulus = response.torsion_modulus
+            # Set the value in the text input
+            self.torsion_modulus_text_input.setText(str(torsion_modulus))
+        except rospy.ServiceException as e:
+            rospy.logerr("Service call to get_dlo_torsion_modulus failed: %s", e)
+
+    def set_young_modulus_button_pressed_cb(self):
+        try:
+            # Get the value from the text input
+            value_str = self.young_modulus_text_input.text()
+            # Convert to float (should accept '2e+10' etc.)
+            young_modulus = float(value_str)
+            # Publish to the change topic
+            msg = Float32()
+            msg.data = young_modulus
+            self.change_young_modulus_publisher.publish(msg)
+            rospy.loginfo("Published new Young's modulus: %s", young_modulus)
+        except ValueError:
+            rospy.logerr("Invalid value for Young's modulus: %s", value_str)
+
+    def set_torsion_modulus_button_pressed_cb(self):
+        try:
+            # Get the value from the text input
+            value_str = self.torsion_modulus_text_input.text()
+            # Convert to float (should accept '2e+10' etc.)
+            torsion_modulus = float(value_str)
+            # Publish to the change topic
+            msg = Float32()
+            msg.data = torsion_modulus
+            self.change_torsion_modulus_publisher.publish(msg)
+            rospy.loginfo("Published new Torsion modulus: %s", torsion_modulus)
+        except ValueError:
+            rospy.logerr("Invalid value for Torsion modulus: %s", value_str)
 
     def format_number(self,num, digits=4):
         # When digits = 4, look at the affect of the function
