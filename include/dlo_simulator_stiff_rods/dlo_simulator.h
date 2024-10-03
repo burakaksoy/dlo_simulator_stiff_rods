@@ -27,6 +27,7 @@
 #include <dlo_simulator_stiff_rods/GetDloYoungModulus.h> // service
 #include <dlo_simulator_stiff_rods/SetDloTorsionModulus.h> // service
 #include <dlo_simulator_stiff_rods/GetDloTorsionModulus.h> // service
+#include <dlo_simulator_stiff_rods/EnableCollisionHandling.h> // service
 
 #include <time.h>
 #include <math.h>
@@ -163,6 +164,9 @@ private:
     bool getDloTorsionModulusCallback(dlo_simulator_stiff_rods::GetDloTorsionModulus::Request &req,
                                         dlo_simulator_stiff_rods::GetDloTorsionModulus::Response &res);
 
+    bool enableCollisionHandlingCallback(dlo_simulator_stiff_rods::EnableCollisionHandling::Request &req,
+                                        dlo_simulator_stiff_rods::EnableCollisionHandling::Response &res);
+
     // ROS variables---------------------------------
     ros::NodeHandle nh_;
     ros::NodeHandle nh_local_;
@@ -193,6 +197,8 @@ private:
     ros::ServiceServer set_torsion_modulus_srv_;
     ros::ServiceServer get_young_modulus_srv_;
     ros::ServiceServer get_torsion_modulus_srv_;
+
+    ros::ServiceServer enable_collision_handling_srv_;
 
     // Map to hold particle ID and its corresponding subscriber
     std::map<int, ros::Subscriber> custom_static_particles_odom_subscribers_;
@@ -295,6 +301,8 @@ private:
     std::string get_dlo_torsion_modulus_service_name_;
     std::string change_dlo_young_modulus_topic_name_;
     std::string change_dlo_torsion_modulus_topic_name_;
+
+    std::string enable_collision_handling_service_name_;
 
     // Dlo visualization parameters 
     Real point_marker_scale_;

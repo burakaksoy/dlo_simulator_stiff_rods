@@ -134,6 +134,7 @@ add_service_files(
   GetDloYoungModulus.srv
   SetDloTorsionModulus.srv
   GetDloTorsionModulus.srv
+  EnableCollisionHandling.srv
 )
 
 ## Generate actions in the 'action' folder

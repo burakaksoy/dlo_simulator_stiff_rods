@@ -21,6 +21,8 @@ from dlo_simulator_stiff_rods.msg import ChangeParticleDynamicity
 from dlo_simulator_stiff_rods.srv import GetDloYoungModulus
 from dlo_simulator_stiff_rods.srv import GetDloTorsionModulus
 
+from dlo_simulator_stiff_rods.srv import EnableCollisionHandling
+
 from std_msgs.msg import Float32
 
 import math
@@ -54,8 +56,10 @@ class TestGUI(qt_widgets.QWidget):
         self.odom_topic_prefix = None
         self.cmd_vel_topic_prefix = None
         self.odom_topic_leader = None
+        
         # simulator_node_name = "/dlo_simulator_stiff_rods_node"
         simulator_node_name = ""
+        
         while not self.particles:
             try:
                 self.particles = rospy.get_param(simulator_node_name + "/custom_static_particles")
@@ -81,6 +85,7 @@ class TestGUI(qt_widgets.QWidget):
         self.binded_relative_poses = {}
 
         # Service clients and publishers for modulus values
+        
         # self.initialize_modulus_services_and_publishers(simulator_node_name)
         self.initialize_modulus_services_and_publishers(simulator_node_name="/dlo_simulator")
 
@@ -103,6 +108,7 @@ class TestGUI(qt_widgets.QWidget):
         # Service clients
         self.get_young_modulus_service_name = simulator_node_name + "/get_dlo_young_modulus"
         self.get_torsion_modulus_service_name = simulator_node_name + "/get_dlo_torsion_modulus"
+        self.enable_collision_handling_service_name = simulator_node_name + "/enable_collision_handling"
 
         # Wait for services to be available
         print("Waiting for services...")
@@ -112,6 +118,7 @@ class TestGUI(qt_widgets.QWidget):
 
         self.get_young_modulus_service_client = rospy.ServiceProxy(self.get_young_modulus_service_name, GetDloYoungModulus)
         self.get_torsion_modulus_service_client = rospy.ServiceProxy(self.get_torsion_modulus_service_name, GetDloTorsionModulus)
+        self.enable_collision_handling_service_client = rospy.ServiceProxy(self.enable_collision_handling_service_name, EnableCollisionHandling)
 
         # Publishers
         self.change_young_modulus_publisher = rospy.Publisher("/change_dlo_young_modulus", Float32, queue_size=1)
@@ -128,7 +135,7 @@ class TestGUI(qt_widgets.QWidget):
         self.text_inputs_ori = {}  # To manually set x y z orientations of the particles (Euler RPY, degree input)
 
         # Add modulus controls at the top
-        self.add_modulus_controls()
+        self.add_sim_controls()
         
         # Add a horizontal line here
         h_line = qt_widgets.QFrame()
@@ -308,7 +315,7 @@ class TestGUI(qt_widgets.QWidget):
         self.shutdown_timer.timeout.connect(self.check_shutdown)
         self.shutdown_timer.start(1000)  # Timer triggers every 1000 ms (1 second)
 
-    def add_modulus_controls(self):
+    def add_sim_controls(self):
         # Create a horizontal layout for the Modulus controls
         modulus_layout = qt_widgets.QHBoxLayout()
 
@@ -360,7 +367,23 @@ class TestGUI(qt_widgets.QWidget):
         set_torsion_modulus_button.clicked.connect(self.set_torsion_modulus_button_pressed_cb)
         modulus_layout.addWidget(set_torsion_modulus_button)
         
+        # Separator
+        separator = qt_widgets.QFrame()
+        separator.setFrameShape(qt_widgets.QFrame.VLine)
+        separator.setFrameShadow(qt_widgets.QFrame.Sunken)
+        modulus_layout.addWidget(separator)
         
+        # Create 'Enable Collision Handling' button
+        enable_collision_button = qt_widgets.QPushButton()
+        enable_collision_button.setText("Enable Collision Handling")
+        enable_collision_button.clicked.connect(self.enable_collision_button_pressed_cb)
+        modulus_layout.addWidget(enable_collision_button)
+
+        # Create 'Disable Collision Handling' button
+        disable_collision_button = qt_widgets.QPushButton()
+        disable_collision_button.setText("Disable Collision Handling")
+        disable_collision_button.clicked.connect(self.disable_collision_button_pressed_cb)
+        modulus_layout.addWidget(disable_collision_button)
 
         # Add the modulus_layout to the main layout at the top
         self.layout.addLayout(modulus_layout)
@@ -557,6 +580,27 @@ class TestGUI(qt_widgets.QWidget):
         self.send_to_target_poses(current_position, current_orientation,
                                     target_position, target_orientation, particle)
 
+    def enable_collision_button_pressed_cb(self):
+        try:
+            # Call the enable_collision_handling service with is_enable=True
+            response = self.enable_collision_handling_service_client(is_enable=True)
+            if response.success:
+                rospy.loginfo("Collision handling enabled successfully.")
+            else:
+                rospy.logerr("Failed to enable collision handling.")
+        except rospy.ServiceException as e:
+            rospy.logerr("Service call to enable_collision_handling failed: %s", e)
+
+    def disable_collision_button_pressed_cb(self):
+        try:
+            # Call the enable_collision_handling service with is_enable=False
+            response = self.enable_collision_handling_service_client(is_enable=False)
+            if response.success:
+                rospy.loginfo("Collision handling disabled successfully.")
+            else:
+                rospy.logerr("Failed to disable collision handling.")
+        except rospy.ServiceException as e:
+            rospy.logerr("Service call to enable_collision_handling failed: %s", e)
     # ----------------------------------------------------------------------------------    
     def send_to_target_poses(self, current_position, current_orientation,
                                     target_position, target_orientation, particle,

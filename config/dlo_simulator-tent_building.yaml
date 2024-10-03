@@ -24,6 +24,8 @@ get_dlo_torsion_modulus_service_name: "get_dlo_torsion_modulus"
 change_dlo_young_modulus_topic_name: "change_dlo_young_modulus"
 change_dlo_torsion_modulus_topic_name: "change_dlo_torsion_modulus"
 
+enable_collision_handling_service_name: "enable_collision_handling"
+
 is_collision_handling_enabled: true # default: true
 contact_tolerance: 0.1 # m, It's like offset around the obstacle object for aabb checking. default: 0.1
 contact_sdf_domain_offset: 2.0 # m, defines the minimum distance to a rigid body that will start contact checking and reporting minimum distance readings

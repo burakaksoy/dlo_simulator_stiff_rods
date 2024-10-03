@@ -259,7 +259,9 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
     nh_local_.param<std::string>("get_dlo_torsion_modulus_service_name", get_dlo_torsion_modulus_service_name_, std::string("get_dlo_torsion_modulus"));
     nh_local_.param<std::string>("change_dlo_young_modulus_topic_name", change_dlo_young_modulus_topic_name_, std::string("change_dlo_young_modulus"));
     nh_local_.param<std::string>("change_dlo_torsion_modulus_topic_name", change_dlo_torsion_modulus_topic_name_, std::string("change_dlo_torsion_modulus"));
-
+    
+    nh_local_.param<std::string>("enable_collision_handling_service_name", enable_collision_handling_service_name_, std::string("enable_collision_handling"));
+    
     nh_local_.param<Real>("rb_line_marker_scale_multiplier", rb_line_marker_scale_multiplier_, 1.0);
     
     nh_local_.param("rb_line_marker_color_rgba", rb_line_marker_color_rgba_, std::vector<Real>({0.0, 0.0, 1.0, 1.0}));
@@ -599,6 +601,9 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
             get_torsion_modulus_srv_ = nh_local_.advertiseService(get_dlo_torsion_modulus_service_name_,
                                                                     &DloSimulator::getDloTorsionModulusCallback, this);
 
+            enable_collision_handling_srv_ = nh_local_.advertiseService(enable_collision_handling_service_name_,
+                                                                    &DloSimulator::enableCollisionHandlingCallback, this);
+
             // Start timers
             timer_simulate_.start();
             timer_render_.start();
@@ -837,28 +842,51 @@ void DloSimulator::changeTorsionModulusCb(const std_msgs::Float32::ConstPtr msg)
 }
 
 // Create setYoungModulus service callback
-bool DloSimulator::setDloYoungModulusCallback(dlo_simulator_stiff_rods::SetDloYoungModulus::Request &req, dlo_simulator_stiff_rods::SetDloYoungModulus::Response &res) {
+bool DloSimulator::setDloYoungModulusCallback(dlo_simulator_stiff_rods::SetDloYoungModulus::Request &req, 
+                                                dlo_simulator_stiff_rods::SetDloYoungModulus::Response &res) {
     dlo_.setYoungModulus(req.young_modulus);
     res.success = true;
     return true;
 }
 
 // Create setTorsionModulus service callback
-bool DloSimulator::setDloTorsionModulusCallback(dlo_simulator_stiff_rods::SetDloTorsionModulus::Request &req, dlo_simulator_stiff_rods::SetDloTorsionModulus::Response &res) {
+bool DloSimulator::setDloTorsionModulusCallback(dlo_simulator_stiff_rods::SetDloTorsionModulus::Request &req, 
+                                                dlo_simulator_stiff_rods::SetDloTorsionModulus::Response &res) {
     dlo_.setTorsionModulus(req.torsion_modulus);
     res.success = true;
     return true;
 }
 
 // Create getYoungModulus service callback
-bool DloSimulator::getDloYoungModulusCallback(dlo_simulator_stiff_rods::GetDloYoungModulus::Request &req, dlo_simulator_stiff_rods::GetDloYoungModulus::Response &res) {
+bool DloSimulator::getDloYoungModulusCallback(dlo_simulator_stiff_rods::GetDloYoungModulus::Request &req, 
+                                                dlo_simulator_stiff_rods::GetDloYoungModulus::Response &res) {
     res.young_modulus = dlo_.getYoungModulus();
     return true;
 }
 
 // Create getTorsionModulus service callback
-bool DloSimulator::getDloTorsionModulusCallback(dlo_simulator_stiff_rods::GetDloTorsionModulus::Request &req, dlo_simulator_stiff_rods::GetDloTorsionModulus::Response &res) {
+bool DloSimulator::getDloTorsionModulusCallback(dlo_simulator_stiff_rods::GetDloTorsionModulus::Request &req, 
+                                                dlo_simulator_stiff_rods::GetDloTorsionModulus::Response &res) {
     res.torsion_modulus = dlo_.getTorsionModulus();
+    return true;
+}
+
+// Create enableCollisionHandling service callback
+bool DloSimulator::enableCollisionHandlingCallback(dlo_simulator_stiff_rods::EnableCollisionHandling::Request &req,
+                                                    dlo_simulator_stiff_rods::EnableCollisionHandling::Response &res) {
+    boost::recursive_mutex::scoped_lock lock(mtx_);
+
+    is_collision_handling_enabled_ = req.is_enable;
+
+    // log the message
+    if (is_collision_handling_enabled_) {
+        ROS_INFO("Collision handling is enabled.");
+    } else {
+        collision_handler_->resetContacts();
+        ROS_INFO("Collision handling is disabled.");
+    }
+
+    res.success = true;
     return true;
 }
 
