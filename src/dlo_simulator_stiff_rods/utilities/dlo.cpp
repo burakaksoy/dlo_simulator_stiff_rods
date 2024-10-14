@@ -69,6 +69,8 @@ Dlo::Dlo(const MeshDLO &mesh,
     // Initialize constraint values for each constraint
     RHS_.assign(num_quaternions_-1,Eigen::Matrix<Real,6,1>::Zero());
 
+    Lambda_.assign(num_quaternions_-1,Eigen::Matrix<Real,6,1>::Zero());
+
     // Initialize 2 jacobians for each constraint
     bendingAndTorsionJacobians_.resize(num_quaternions_-1);
 	std::vector<Eigen::Matrix<Real,3,3>> sampleJacobians(2);
@@ -419,9 +421,10 @@ void Dlo::solveStretchBendTwistConstraints(const Real &dt){
         // Compute bending and torsion part of constraint violation (eqn 23, lower part)
 
         // fill right hand side of the linear equation system (Equation (19))
-        Eigen::Matrix<Real, 6, 1>& rhs= RHS_[i];
-        rhs.block<3, 1>(0, 0) = - (connector0 - connector1); // stretchViolation;
-        rhs.block<3, 1>(3, 0) = - (omega - restDarbouxVector); // bendingAndTorsionViolation;
+        Eigen::Matrix<Real, 6, 1>& rhs = RHS_[i];
+        Eigen::Matrix<Real, 6, 1>& lambda = Lambda_[i];
+        rhs.block<3, 1>(0, 0) = - (connector0 - connector1) - lambda.block<3, 1>(0, 0).cwiseProduct(stretch_compliance); // stretchViolation
+        rhs.block<3, 1>(3, 0) = - (omega - restDarbouxVector) - lambda.block<3, 1>(3, 0).cwiseProduct(bending_and_torsion_compliance); // bendingAndTorsion Violation 
 
         // compute max error
 		for (unsigned char j(0); j < 6; ++j)
@@ -513,7 +516,7 @@ void Dlo::solveStretchBendTwistConstraints(const Real &dt){
         // JMJT.row(4) *= (1.0 + (bending_and_torsion_compliance(1)*beta_tilde_bending_torsion(1)/dt)); 
         // JMJT.row(5) *= (1.0 + (bending_and_torsion_compliance(2)*beta_tilde_bending_torsion(2)/dt)); 
 
-        // add compliance
+        // add compliance (alpha tilde) 
         JMJT(0, 0) += stretch_compliance(0);
         JMJT(1, 1) += stretch_compliance(1);
         JMJT(2, 2) += stretch_compliance(2);
@@ -565,12 +568,23 @@ void Dlo::solveStretchBendTwistConstraints(const Real &dt){
             q1.normalize();
         }
 
-        // Calculate the Force/Torque (Wrench) at each segment ---------------
-        for_.col(id0) += inv_dt_sqr * deltaLambdaStretch;
-        for_.col(id1) += inv_dt_sqr * -deltaLambdaStretch;
+        // Finally, Update the lambdas (If num_steps = 1, then this is not needed)
+        // lambda += deltaLambda;
 
-        tor_.col(id0) += inv_dt_sqr * (-ra_crossT * deltaLambdaStretch + jOmegaG0.transpose() * deltaLambdaBendingAndTorsion);
-        tor_.col(id1) += inv_dt_sqr * ( rb_crossT * deltaLambdaStretch + jOmegaG1.transpose() * deltaLambdaBendingAndTorsion);
+        const Eigen::Matrix<Real,3,1> & lambdaStretch = lambda.block<3, 1>(0, 0);
+        const Eigen::Matrix<Real,3,1> & lambdaBendingAndTorsion = lambda.block<3, 1>(3, 0);
+
+        // Calculate the Force/Torque (Wrench) at each segment ---------------
+        // for_.col(id0) += inv_dt_sqr * deltaLambdaStretch;
+        // for_.col(id1) += inv_dt_sqr * -deltaLambdaStretch;
+        for_.col(id0) += inv_dt_sqr * lambdaStretch;
+        for_.col(id1) += inv_dt_sqr * -lambdaStretch;
+        
+        // tor_.col(id0) += inv_dt_sqr * (-ra_crossT * deltaLambdaStretch + jOmegaG0.transpose() * deltaLambdaBendingAndTorsion);
+        // tor_.col(id1) += inv_dt_sqr * ( rb_crossT * deltaLambdaStretch + jOmegaG1.transpose() * deltaLambdaBendingAndTorsion);
+        tor_.col(id0) += inv_dt_sqr * (-ra_crossT * lambdaStretch + jOmegaG0.transpose() * lambdaBendingAndTorsion);
+        tor_.col(id1) += inv_dt_sqr * ( rb_crossT * lambdaStretch + jOmegaG1.transpose() * lambdaBendingAndTorsion);
+
     }
 }
 
@@ -673,6 +687,13 @@ void Dlo::resetForces(){
     // Also Reset accumulated forces for the next iteration
     for_.setZero();
     tor_.setZero();
+}
+
+void Dlo::resetLambdas(){
+    // Reset the lambdas for the next iteration
+    for (auto& lambda : Lambda_) {
+        lambda.setZero();
+    }
 }
 
 void Dlo::normalizeForces(const int &num_substeps){

@@ -140,6 +140,8 @@ public:
     void resetForces();
     void normalizeForces(const int &num_substeps);
 
+    void resetLambdas();
+
     Eigen::Matrix2Xi *getStretchBendTwistIdsPtr();
 
     std::vector<Eigen::Matrix<Real,3,1>> *getPosPtr();
@@ -216,7 +218,8 @@ private:
 
     std::vector<Eigen::Matrix<Real,6,1>> RHS_;
     std::vector<std::vector<Eigen::Matrix<Real,3,3>>> bendingAndTorsionJacobians_;
-    
+
+    std::vector<Eigen::Matrix<Real,6,1>> Lambda_;
 
     Real zero_stretch_stiffness_;
     Real young_modulus_;

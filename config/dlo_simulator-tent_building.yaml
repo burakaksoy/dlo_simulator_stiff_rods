@@ -14,8 +14,8 @@ dlo_density: 1792.89 # dlo mass per meter cube (kg/m^3)
 dlo_num_segments: 40 # max 45 # number of segment in dlo (int)
 
 dlo_zero_stretch_stiffness: 1.0e+14
-dlo_young_modulus: 30.0e+9 # 30.0e+9 # 3.0e+7 # E, elasticity modulus (unit: Pa?)
-dlo_torsion_modulus: 10.0e+9 # 10.0e+9 # 1.0e+7 # G, Shear modulus in classical phsysics. (unit: Pa?)
+dlo_young_modulus: 3.0e+10 # 30.0e+9 # 3.0e+7 # E, elasticity modulus (unit: Pa?)
+dlo_torsion_modulus: 1.0e+10 # 10.0e+9 # 1.0e+7 # G, Shear modulus in classical phsysics. (unit: Pa?)
 
 set_dlo_young_modulus_service_name: "set_dlo_young_modulus"
 set_dlo_torsion_modulus_service_name: "set_dlo_torsion_modulus"
