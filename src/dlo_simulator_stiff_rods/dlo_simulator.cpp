@@ -1126,21 +1126,66 @@ void DloSimulator::simulate(const ros::TimerEvent& e){
 
     ros::Time start_time = ros::Time::now();
     
+    // // --------------------------------------------------------------
+    // // Small steps (Substep XPBD) 2019 implementation
+
+    // // Real change_in_max_error = std::numeric_limits<Real>::infinity(); // Init change in error to infinity
+    // // Real prev_max_error = 0.0;
+    // // Real current_max_error = 0.0;
+
+    // for (int i = 0; i< num_steps_; i++){
+
+    //     dlo_.resetForces();
+    //     dlo_.resetLambdas();
+
+    //     int j;
+    //     for (j = 0; j < num_substeps_; j++){
+    //         dlo_.preSolve(sdt,gravity_);
+
+    //         // Collision Handling, detect collisions
+    //         if (is_collision_handling_enabled_){
+    //             collision_handler_->collisionDetection();  
+    //         }
+    //         collision_handler_->solveContactPositionConstraints(sdt);
+    //         dlo_.solve(sdt);
+
+    //         dlo_.postSolve(sdt);
+
+    //         collision_handler_->solveContactVelocityConstraints(sdt);
+
+    //         // current_max_error = dlo_.getMaxError();
+    //         // if (current_max_error < 1.0e-2){
+    //         //     i = num_steps_;
+    //         //     break;
+    //         // }
+    //         // // Calculate change in max error
+    //         // change_in_max_error = std::abs(current_max_error - prev_max_error);
+
+    //         // if (change_in_max_error < 1.0e-9){
+    //         //     i = num_steps_;
+    //         //     break;
+    //         // // }
+    //         // // Update prev_max_error
+    //         // prev_max_error = current_max_error;
+
+    //     }
+    //     // std::cout << "itr: " << j << ",Max error: " << current_max_error << std::endl;
+    //     // std::cout << "itr: " << j << ",Max error change: " << change_in_max_error << std::endl;
+
+    // }
+    // // --------------------------------------------------------------
+
     // --------------------------------------------------------------
-    // Small steps (Substep XPBD) 2019 implementation
+    // Small steps (Substep XPBD) 2019 implementation 2
 
-    // Real change_in_max_error = std::numeric_limits<Real>::infinity(); // Init change in error to infinity
-    // Real prev_max_error = 0.0;
-    // Real current_max_error = 0.0;
-
-    for (int i = 0; i< num_steps_; i++){
-
+    for (int i = 0; i< num_substeps_; i++){
         dlo_.resetForces();
         dlo_.resetLambdas();
 
+        dlo_.preSolve(sdt,gravity_);
+
         int j;
-        for (j = 0; j < num_substeps_; j++){
-            dlo_.preSolve(sdt,gravity_);
+        for (j = 0; j < num_steps_; j++){
 
             // Collision Handling, detect collisions
             if (is_collision_handling_enabled_){
@@ -1149,32 +1194,12 @@ void DloSimulator::simulate(const ros::TimerEvent& e){
             collision_handler_->solveContactPositionConstraints(sdt);
             dlo_.solve(sdt);
 
-            dlo_.postSolve(sdt);
-
-            collision_handler_->solveContactVelocityConstraints(sdt);
-
-            // current_max_error = dlo_.getMaxError();
-            // if (current_max_error < 1.0e-2){
-            //     i = num_steps_;
-            //     break;
-            // }
-            // // Calculate change in max error
-            // change_in_max_error = std::abs(current_max_error - prev_max_error);
-
-            // if (change_in_max_error < 1.0e-9){
-            //     i = num_steps_;
-            //     break;
-            // // }
-            // // Update prev_max_error
-            // prev_max_error = current_max_error;
-
         }
-        // std::cout << "itr: " << j << ",Max error: " << current_max_error << std::endl;
-        // std::cout << "itr: " << j << ",Max error change: " << change_in_max_error << std::endl;
 
+        dlo_.postSolve(sdt);
+        collision_handler_->solveContactVelocityConstraints(sdt);
     }
     // --------------------------------------------------------------
-
 
     // // --------------------------------------------------------------
     // // XPBD 2016 implementation

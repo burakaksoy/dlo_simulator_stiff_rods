@@ -424,13 +424,13 @@ void Dlo::solveStretchBendTwistConstraints(const Real &dt){
         Eigen::Matrix<Real, 6, 1>& rhs = RHS_[i];
         Eigen::Matrix<Real, 6, 1>& lambda = Lambda_[i];
 
-        // If substep implementation is used lambda is not needed
-        rhs.block<3, 1>(0, 0) = - (connector0 - connector1); // stretchViolation
-        rhs.block<3, 1>(3, 0) = - (omega - restDarbouxVector); // bendingAndTorsion Violation 
+        // // If substep implementation is used lambda is not needed
+        // rhs.block<3, 1>(0, 0) = - (connector0 - connector1); // stretchViolation
+        // rhs.block<3, 1>(3, 0) = - (omega - restDarbouxVector); // bendingAndTorsion Violation 
 
-        // // If standard XBPD is used lambda is needed
-        // rhs.block<3, 1>(0, 0) = - (connector0 - connector1) - lambda.block<3, 1>(0, 0).cwiseProduct(stretch_compliance); // stretchViolation
-        // rhs.block<3, 1>(3, 0) = - (omega - restDarbouxVector) - lambda.block<3, 1>(3, 0).cwiseProduct(bending_and_torsion_compliance); // bendingAndTorsion Violation 
+        // If standard XBPD is used lambda is needed
+        rhs.block<3, 1>(0, 0) = - (connector0 - connector1) - lambda.block<3, 1>(0, 0).cwiseProduct(stretch_compliance); // stretchViolation
+        rhs.block<3, 1>(3, 0) = - (omega - restDarbouxVector) - lambda.block<3, 1>(3, 0).cwiseProduct(bending_and_torsion_compliance); // bendingAndTorsion Violation 
 
         // compute max error
 		for (unsigned char j(0); j < 6; ++j)
@@ -559,18 +559,20 @@ void Dlo::solveStretchBendTwistConstraints(const Real &dt){
         const Eigen::Matrix<Real,3,1> & deltaLambdaStretch = deltaLambda.block<3, 1>(0, 0);
         const Eigen::Matrix<Real,3,1> & deltaLambdaBendingAndTorsion = deltaLambda.block<3, 1>(3, 0);
 
+        Real sor = 1.0; // Successive Over-Relaxation
+
         // Now apply the corrections -----------------------------
         if (isDynamic0)
         {
-            p0 += invMass0 * deltaLambdaStretch;
-            q0.coeffs() += G0 * (inertiaInverseW0 * -ra_crossT * deltaLambdaStretch + MInvJT0 * deltaLambdaBendingAndTorsion);
+            p0 += invMass0 * deltaLambdaStretch * sor;
+            q0.coeffs() += G0 * (inertiaInverseW0 * -ra_crossT * deltaLambdaStretch + MInvJT0 * deltaLambdaBendingAndTorsion) * sor;
             q0.normalize();
         }
 
         if (isDynamic1)
         {
-            p1 += -invMass1 * deltaLambdaStretch;
-            q1.coeffs() += G1 * (inertiaInverseW1 * rb_crossT * deltaLambdaStretch + MInvJT1 * deltaLambdaBendingAndTorsion);
+            p1 += -invMass1 * deltaLambdaStretch * sor;
+            q1.coeffs() += G1 * (inertiaInverseW1 * rb_crossT * deltaLambdaStretch + MInvJT1 * deltaLambdaBendingAndTorsion) * sor;
             q1.normalize();
         }
 

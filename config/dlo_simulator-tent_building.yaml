@@ -3,10 +3,10 @@ gravity_x: 0.0 # m/s^2
 gravity_y: 0.0 # m/s^2
 gravity_z: -9.804 # m/s^2
 
-dt: 0.02 #0.08 # 0.002 # seconds. Simulated time per iteration of the dlo simulation.
+dt: 0.002 #0.08 # 0.002 # seconds. Simulated time per iteration of the dlo simulation.
 set_sim_rate_auto: false  # to set the simulation rate and dt automaticall, do not use
-num_substeps: 400 # 2000 #40 # Number of substeps per iteration based on 2019 Small Steps XPBD paper.
-num_steps: 1 # experimental only. do not change from 1
+num_substeps: 40 # 2000 #40 # Number of substeps per iteration based on 2019 Small Steps XPBD paper.
+num_steps: 2 # experimental only. do not change from 1
 
 dlo_l: 3.3528 # 2.25 # 3.3528 # dlo length in meters
 dlo_r: 0.0035 # 0.0035 # 0.0035 # dlo radius in meters
@@ -36,8 +36,8 @@ use_zero_stretch_stiffness: true
 # and dlo_zero_stretch_stiffness parameter will be used as a scalar multiplier
 
 # Global artificial velocity damping coefficients. Defaults to 0.0. 
-global_damp_coeff_v: 5.9e-1 # 2.1e-4; // 0.9e-3
-global_damp_coeff_w: 0.9e-3 # 2.1e-4;
+global_damp_coeff_v: 5.9e-1 # 0.0 # 5.9e-1 # 2.1e-4; // 0.9e-3
+global_damp_coeff_w: 0.9e-1 # 0.0 # 0.9e-3 # 2.1e-4;
 
 # DLO Initial Transformations (By Default, the dlo is laying in +y-axis to -y-axis direction centered at the origin)
 # initial_height: 0.0 # initial dlo height from ground (m) (Deprecated, use dlo_translation instead)
@@ -60,7 +60,7 @@ custom_static_particles_odom_topic_prefix: "custom_static_particles_odom_"
 set_particle_dynamicity_service_name: "set_particle_dynamicity"
 change_particle_dynamicity_topic_name: "change_particle_dynamicity"
 
-simulation_rate: 100.0
+simulation_rate: 500.0
 rendering_rate: 30.0 # 30 # Hz, frequency to publish the dlo vertices and edges to RVIZ visualization markers
 
 dlo_state_topic_name: "dlo_state" # topic name to publish the DLO state with custom SegmetState Array msgs
