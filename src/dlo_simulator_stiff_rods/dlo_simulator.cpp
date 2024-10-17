@@ -1113,20 +1113,31 @@ void DloSimulator::simulate(const ros::TimerEvent& e){
     // With some kind of self lock to prevent collision with rendering
     boost::recursive_mutex::scoped_lock lock(mtx_);
 
+    // // Attempt to acquire the lock without blocking
+    // boost::unique_lock<boost::recursive_mutex> lock(mtx_, boost::try_to_lock);
+
+    // if (!lock.owns_lock()) {
+    //     // Could not acquire lock, previous call is still running
+    //     ROS_WARN("simulate function skipped: previous call still in progress.");
+    //     return;
+    // }
+
     Real sdt = dt_ / num_substeps_;
 
     ros::Time start_time = ros::Time::now();
     
-    // Small steps implementation
-    // -------------------------------
-    dlo_.resetForces();
-    dlo_.resetLambdas();
+    // --------------------------------------------------------------
+    // Small steps (Substep XPBD) 2019 implementation
 
     // Real change_in_max_error = std::numeric_limits<Real>::infinity(); // Init change in error to infinity
     // Real prev_max_error = 0.0;
     // Real current_max_error = 0.0;
 
     for (int i = 0; i< num_steps_; i++){
+
+        dlo_.resetForces();
+        dlo_.resetLambdas();
+
         int j;
         for (j = 0; j < num_substeps_; j++){
             dlo_.preSolve(sdt,gravity_);
@@ -1160,8 +1171,34 @@ void DloSimulator::simulate(const ros::TimerEvent& e){
         }
         // std::cout << "itr: " << j << ",Max error: " << current_max_error << std::endl;
         // std::cout << "itr: " << j << ",Max error change: " << change_in_max_error << std::endl;
+
     }
-    // -------------------------------
+    // --------------------------------------------------------------
+
+
+    // // --------------------------------------------------------------
+    // // XPBD 2016 implementation
+    // dlo_.resetForces();
+    // dlo_.resetLambdas();
+
+    // dlo_.preSolve(dt_,gravity_);
+    
+    // for (int i = 0; i< num_steps_; i++){
+    //     int j;
+    //     for (j = 0; j < num_substeps_; j++){
+    //         // Collision Handling, detect collisions
+    //         if (is_collision_handling_enabled_){
+    //             collision_handler_->collisionDetection();  
+    //         }
+    //         collision_handler_->solveContactPositionConstraints(sdt);
+    //         dlo_.solve(sdt);
+    //     }
+    // }
+
+    // dlo_.postSolve(dt_);
+    // collision_handler_->solveContactVelocityConstraints(dt_);
+    // // --------------------------------------------------------------
+
 
     // // To debug force readings from hanged corners (use only when robots are not attached)
     // std::vector<int> *attached_ids_ptr = dlo_.getAttachedIdsPtr();
@@ -1179,7 +1216,7 @@ void DloSimulator::simulate(const ros::TimerEvent& e){
     ros::Duration elapsed_time = finish_time - start_time;
     time_sum_ += elapsed_time.toSec();
     time_frames_ += 1;
-    if (time_frames_ > 100) {
+    if (time_frames_ > 2) {
         time_sum_ /= time_frames_;
         // ROS_INFO("[Dlo Simulator]: %-4.2lf ms per simulation iteration", time_sum_*1000);
         ROS_INFO_THROTTLE(5, "[Dlo Simulator]: %-4.2lf ms per simulation iteration", time_sum_*1000);

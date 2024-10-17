@@ -3,9 +3,9 @@ gravity_x: 0.0 # m/s^2
 gravity_y: 0.0 # m/s^2
 gravity_z: -9.804 # m/s^2
 
-dt: 0.002 # seconds. Simulated time per iteration of the dlo simulation.
+dt: 0.02 #0.08 # 0.002 # seconds. Simulated time per iteration of the dlo simulation.
 set_sim_rate_auto: false  # to set the simulation rate and dt automaticall, do not use
-num_substeps: 40 # 40  #40 # Number of substeps per iteration based on 2019 Small Steps XPBD paper.
+num_substeps: 400 # 2000 #40 # Number of substeps per iteration based on 2019 Small Steps XPBD paper.
 num_steps: 1 # experimental only. do not change from 1
 
 dlo_l: 3.3528 # 2.25 # 3.3528 # dlo length in meters
@@ -14,8 +14,8 @@ dlo_density: 1792.89 # dlo mass per meter cube (kg/m^3)
 dlo_num_segments: 40 # max 45 # number of segment in dlo (int)
 
 dlo_zero_stretch_stiffness: 1.0e+14
-dlo_young_modulus: 3.0e+10 # 30.0e+9 # 3.0e+7 # E, elasticity modulus (unit: Pa?)
-dlo_torsion_modulus: 1.0e+10 # 10.0e+9 # 1.0e+7 # G, Shear modulus in classical phsysics. (unit: Pa?)
+dlo_young_modulus: 3.0e+10 # 3.0e+7 # E, elasticity modulus (unit: Pa?)
+dlo_torsion_modulus: 1.0e+10 # 1.0e+7 # G, Shear modulus in classical phsysics. (unit: Pa?)
 
 set_dlo_young_modulus_service_name: "set_dlo_young_modulus"
 set_dlo_torsion_modulus_service_name: "set_dlo_torsion_modulus"
@@ -36,8 +36,8 @@ use_zero_stretch_stiffness: true
 # and dlo_zero_stretch_stiffness parameter will be used as a scalar multiplier
 
 # Global artificial velocity damping coefficients. Defaults to 0.0. 
-global_damp_coeff_v: 5.9e-1 # 0.0 # 5.9e-1 # 2.1e-4; // 0.9e-3
-global_damp_coeff_w: 0.9e-3 # 0.0 # 0.9e-3 # 2.1e-4;
+global_damp_coeff_v: 5.9e-1 # 2.1e-4; // 0.9e-3
+global_damp_coeff_w: 0.9e-3 # 2.1e-4;
 
 # DLO Initial Transformations (By Default, the dlo is laying in +y-axis to -y-axis direction centered at the origin)
 # initial_height: 0.0 # initial dlo height from ground (m) (Deprecated, use dlo_translation instead)
@@ -60,8 +60,8 @@ custom_static_particles_odom_topic_prefix: "custom_static_particles_odom_"
 set_particle_dynamicity_service_name: "set_particle_dynamicity"
 change_particle_dynamicity_topic_name: "change_particle_dynamicity"
 
-simulation_rate: 500.0
-rendering_rate: 30.0 # Hz, frequency to publish the dlo vertices and edges to RVIZ visualization markers
+simulation_rate: 100.0
+rendering_rate: 30.0 # 30 # Hz, frequency to publish the dlo vertices and edges to RVIZ visualization markers
 
 dlo_state_topic_name: "dlo_state" # topic name to publish the DLO state with custom SegmetState Array msgs
 dlo_state_pub_rate: 50.0 # Hz, frequency to publish dlo state as a feedback to some other node 

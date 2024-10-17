@@ -423,8 +423,14 @@ void Dlo::solveStretchBendTwistConstraints(const Real &dt){
         // fill right hand side of the linear equation system (Equation (19))
         Eigen::Matrix<Real, 6, 1>& rhs = RHS_[i];
         Eigen::Matrix<Real, 6, 1>& lambda = Lambda_[i];
-        rhs.block<3, 1>(0, 0) = - (connector0 - connector1) - lambda.block<3, 1>(0, 0).cwiseProduct(stretch_compliance); // stretchViolation
-        rhs.block<3, 1>(3, 0) = - (omega - restDarbouxVector) - lambda.block<3, 1>(3, 0).cwiseProduct(bending_and_torsion_compliance); // bendingAndTorsion Violation 
+
+        // If substep implementation is used lambda is not needed
+        rhs.block<3, 1>(0, 0) = - (connector0 - connector1); // stretchViolation
+        rhs.block<3, 1>(3, 0) = - (omega - restDarbouxVector); // bendingAndTorsion Violation 
+
+        // // If standard XBPD is used lambda is needed
+        // rhs.block<3, 1>(0, 0) = - (connector0 - connector1) - lambda.block<3, 1>(0, 0).cwiseProduct(stretch_compliance); // stretchViolation
+        // rhs.block<3, 1>(3, 0) = - (omega - restDarbouxVector) - lambda.block<3, 1>(3, 0).cwiseProduct(bending_and_torsion_compliance); // bendingAndTorsion Violation 
 
         // compute max error
 		for (unsigned char j(0); j < 6; ++j)
@@ -568,8 +574,8 @@ void Dlo::solveStretchBendTwistConstraints(const Real &dt){
             q1.normalize();
         }
 
-        // Finally, Update the lambdas (If num_steps = 1, then this is not needed)
-        // lambda += deltaLambda;
+        // Finally, Update the lambdas
+        lambda += deltaLambda;
 
         const Eigen::Matrix<Real,3,1> & lambdaStretch = lambda.block<3, 1>(0, 0);
         const Eigen::Matrix<Real,3,1> & lambdaBendingAndTorsion = lambda.block<3, 1>(3, 0);
