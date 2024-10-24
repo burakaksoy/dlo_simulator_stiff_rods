@@ -6,7 +6,7 @@ gravity_z: -9.804 # m/s^2
 dt: 0.002 #0.08 # 0.002 # seconds. Simulated time per iteration of the dlo simulation.
 set_sim_rate_auto: false  # to set the simulation rate and dt automaticall, do not use
 num_substeps: 40 # 2000 #40 # Number of substeps per iteration based on 2019 Small Steps XPBD paper.
-num_steps: 2 # experimental only. do not change from 1
+num_steps: 1 # experimental only. do not change from 1
 
 dlo_l: 3.3528 # 2.25 # 3.3528 # dlo length in meters
 dlo_r: 0.0035 # 0.0035 # 0.0035 # dlo radius in meters

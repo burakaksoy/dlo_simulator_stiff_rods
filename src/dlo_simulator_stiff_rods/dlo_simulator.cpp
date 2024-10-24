@@ -1176,7 +1176,7 @@ void DloSimulator::simulate(const ros::TimerEvent& e){
     // // --------------------------------------------------------------
 
     // --------------------------------------------------------------
-    // Small steps (Substep XPBD) 2019 implementation 2
+    // Small steps (Substep XPBD) 2019 implementation 2 (CORRECT)
 
     for (int i = 0; i< num_substeps_; i++){
         dlo_.resetForces();

@@ -257,30 +257,30 @@ void Dlo::preSolve(const Real &dt, const Eigen::Matrix<Real,3,1> &gravity){
         // Semi implicit euler (position)
         #pragma omp for schedule(static) 
         // #pragma omp parallel for 
-        for (int i = 0; i< num_particles_; i++){
-            if (is_dynamic_[i]){
+    for (int i = 0; i< num_particles_; i++){
+        if (is_dynamic_[i]){
                 vel_.col(i) += gravity*dt;
-            }
+        }
             prev_pos_[i] = pos_[i];
             pos_[i] += vel_.col(i)*dt;
-        }
+    }
 
         // Semi implicit euler (rotation)
         #pragma omp for schedule(static) 
         // #pragma omp parallel for
-        for (int i = 0; i< num_quaternions_; i++){
-            if (is_dynamic_[i]){
+    for (int i = 0; i< num_quaternions_; i++){
+        if (is_dynamic_[i]){
                 //assume zero external torque.
                 Eigen::Matrix<Real,3,1> torque = Eigen::Matrix<Real,3,1>::Zero();    
-                // integration 
-                omega_.col(i) += dt * inv_iner_[i] * (torque - (omega_.col(i).cross(iner_[i]*omega_.col(i))));
-            }
-            prev_ori_[i] = ori_[i];
-            Eigen::Quaternion<Real> angVelQ(0.0, omega_.col(i)(0), omega_.col(i)(1), omega_.col(i)(2));
-            ori_[i].coeffs() += dt * 0.5 * (angVelQ * ori_[i]).coeffs();
-            ori_[i].normalize();
+            // integration 
+            omega_.col(i) += dt * inv_iner_[i] * (torque - (omega_.col(i).cross(iner_[i]*omega_.col(i))));
         }
+            prev_ori_[i] = ori_[i];
+        Eigen::Quaternion<Real> angVelQ(0.0, omega_.col(i)(0), omega_.col(i)(1), omega_.col(i)(2));
+            ori_[i].coeffs() += dt * 0.5 * (angVelQ * ori_[i]).coeffs();
+        ori_[i].normalize();
     }
+}
 }
 
 void Dlo::solve(const Real &dt){
@@ -432,11 +432,8 @@ void Dlo::solveStretchBendTwistConstraints(const Real &dt){
         rhs.block<3, 1>(0, 0) = - (connector0 - connector1) - lambda.block<3, 1>(0, 0).cwiseProduct(stretch_compliance); // stretchViolation
         rhs.block<3, 1>(3, 0) = - (omega - restDarbouxVector) - lambda.block<3, 1>(3, 0).cwiseProduct(bending_and_torsion_compliance); // bendingAndTorsion Violation 
 
-        // compute max error
-		for (unsigned char j(0); j < 6; ++j)
-		{
-			max_error_ = std::max(max_error_, std::abs(rhs[j]));
-		}
+        // Compute max error
+        max_error_ = std::max(max_error_, rhs.cwiseAbs().maxCoeff());
         
         // compute G matrices (Equation (27)), but first the bottom part of the matrix
         Eigen::Matrix<Real, 4, 3> G0, G1;
@@ -523,12 +520,14 @@ void Dlo::solveStretchBendTwistConstraints(const Real &dt){
         // JMJT.row(5) *= (1.0 + (bending_and_torsion_compliance(2)*beta_tilde_bending_torsion(2)/dt)); 
 
         // add compliance (alpha tilde) 
-        JMJT(0, 0) += stretch_compliance(0);
-        JMJT(1, 1) += stretch_compliance(1);
-        JMJT(2, 2) += stretch_compliance(2);
-        JMJT(3, 3) += bending_and_torsion_compliance(0);
-        JMJT(4, 4) += bending_and_torsion_compliance(1);
-        JMJT(5, 5) += bending_and_torsion_compliance(2);
+        // JMJT(0, 0) += stretch_compliance(0);
+        // JMJT(1, 1) += stretch_compliance(1);
+        // JMJT(2, 2) += stretch_compliance(2);
+        // JMJT(3, 3) += bending_and_torsion_compliance(0);
+        // JMJT(4, 4) += bending_and_torsion_compliance(1);
+        // JMJT(5, 5) += bending_and_torsion_compliance(2);
+        JMJT.diagonal().head<3>().noalias() += stretch_compliance;
+        JMJT.diagonal().tail<3>().noalias() += bending_and_torsion_compliance;
 
         // // Calculate Jv = J1*v1 + J2*v2 for damping
         // Eigen::Matrix<Real,6,1> Jv;
@@ -596,13 +595,13 @@ void Dlo::solveStretchBendTwistConstraints(const Real &dt){
     }
 }
 
-void Dlo::computeMatrixK(const Eigen::Matrix<Real,3,1> &connector, 
+inline void Dlo::computeMatrixK(const Eigen::Matrix<Real,3,1> &connector, 
                         const Real invMass, 
                         const Eigen::Matrix<Real,3,1> &x, 
                         const Eigen::Matrix<Real,3,3> &inertiaInverseW, 
                         Eigen::Matrix<Real,3,3> &K) {
     // This function computes the upper left block of J*M^-1*J.T directly.
-	if (invMass != 0.0)
+	if (invMass != static_cast<Real>(0.0))
 	{
         // vector from center of mass to conneting point in world frame
 		const Eigen::Matrix<Real,3,1> v = connector - x;
@@ -632,7 +631,7 @@ void Dlo::computeMatrixK(const Eigen::Matrix<Real,3,1> &connector,
 		K.setZero();
 }
 
-void Dlo::crossProductMatrix(const Eigen::Matrix<Real,3,1> &v, Eigen::Matrix<Real,3,3> &v_hat){
+inline void Dlo::crossProductMatrix(const Eigen::Matrix<Real,3,1> &v, Eigen::Matrix<Real,3,3> &v_hat){
 	v_hat <<     0, -v(2),  v(1),
               v(2),     0, -v(0),
              -v(1),  v(0),     0;
@@ -642,11 +641,11 @@ void Dlo::postSolve(const Real &dt){
     // Update velocities
     #pragma omp parallel default(shared)
     {
-        // Update linear velocities
+    // Update linear velocities
         #pragma omp for schedule(static) 
         // #pragma omp parallel for 
         for (int i = 0; i< num_particles_; i++){
-            if (is_dynamic_[i]){
+        if (is_dynamic_[i]){
                 vel_.col(i) = (pos_[i] - prev_pos_[i])/dt;
             }
         }

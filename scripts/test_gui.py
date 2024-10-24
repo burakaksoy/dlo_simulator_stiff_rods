@@ -57,8 +57,8 @@ class TestGUI(qt_widgets.QWidget):
         self.cmd_vel_topic_prefix = None
         self.odom_topic_leader = None
         
-        # simulator_node_name = "/dlo_simulator_stiff_rods_node"
-        simulator_node_name = ""
+        simulator_node_name = "/dlo_simulator_stiff_rods_node"
+        # simulator_node_name = ""
         
         while not self.particles:
             try:
@@ -86,8 +86,8 @@ class TestGUI(qt_widgets.QWidget):
 
         # Service clients and publishers for modulus values
         
-        # self.initialize_modulus_services_and_publishers(simulator_node_name)
-        self.initialize_modulus_services_and_publishers(simulator_node_name="/dlo_simulator")
+        self.initialize_modulus_services_and_publishers(simulator_node_name)
+        # self.initialize_modulus_services_and_publishers(simulator_node_name="/dlo_simulator")
 
         self.createUI()
 
@@ -212,6 +212,7 @@ class TestGUI(qt_widgets.QWidget):
             # Create Set Position button
             set_pos_button = qt_widgets.QPushButton()
             set_pos_button.setText("Set Position")
+            # set_pos_button.clicked.connect(lambda _, p=particle: self.set_position_cb_basic(p))
             set_pos_button.clicked.connect(lambda _, p=particle: self.set_position_cb(p))
             row_layout.addWidget(set_pos_button)
 
@@ -243,6 +244,7 @@ class TestGUI(qt_widgets.QWidget):
             # Create Set Orientation button
             set_ori_button = qt_widgets.QPushButton()
             set_ori_button.setText("Set Orientation")
+            # set_ori_button.clicked.connect(lambda _, p=particle: self.set_orientation_cb_basic(p))
             set_ori_button.clicked.connect(lambda _, p=particle: self.set_orientation_cb(p))
             row_layout.addWidget(set_ori_button)
 
