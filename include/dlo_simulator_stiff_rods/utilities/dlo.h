@@ -119,8 +119,8 @@ public:
     void setStaticParticles(const std::vector<int> &particles);
     void setDynamicParticles(const std::vector<int> &particles);
     
-    const bool isStaticParticle(const int &particle);
-    const bool isDynamicParticle(const int &particle);
+    const bool isStaticParticle(const int &particle) const;
+    const bool isDynamicParticle(const int &particle) const;
 
     void setYoungModulus(const Real &young_modulus);
     void setTorsionModulus(const Real &torsion_modulus);

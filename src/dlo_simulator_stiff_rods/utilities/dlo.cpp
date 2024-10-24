@@ -221,14 +221,14 @@ void Dlo::setDynamicParticles(const std::vector<int> &particles){
     }
 }
 
-const bool Dlo::isStaticParticle(const int &particle){
+const bool Dlo::isStaticParticle(const int &particle) const{
     if(particle < 0 || particle >= is_dynamic_.size()) {
         throw std::out_of_range("Index out of bounds");
     }
     return !is_dynamic_[particle];
 }
 
-const bool Dlo::isDynamicParticle(const int &particle){
+const bool Dlo::isDynamicParticle(const int &particle) const{
     if(particle < 0 || particle >= is_dynamic_.size()) {
         throw std::out_of_range("Index out of bounds");
     }
