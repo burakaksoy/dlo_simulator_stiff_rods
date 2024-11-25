@@ -107,7 +107,8 @@ public:
         const Real &radius,
         const bool &use_zero_stretch_stiffness,
         const Real &global_damp_coeff_v,
-        const Real &global_damp_coeff_w);
+        const Real &global_damp_coeff_w,
+        const Eigen::Matrix<Real,3,1> &gravity);
     ~Dlo();
 
     void preSolve(const Real &dt, const Eigen::Matrix<Real,3,1> &gravity);
@@ -127,6 +128,11 @@ public:
 
     const Real getYoungModulus();
     const Real getTorsionModulus();
+
+    const Real getZeroStretchStiffness();
+    const Real getDensity();
+    const Real getRadius();
+    const Eigen::Matrix<Real,3,1> getGravity();
     
     int attachNearest(const Eigen::Matrix<Real,3,1> &pos);
     void updateAttachedPose(const int &id, 
@@ -185,6 +191,8 @@ private:
 
     // Variables
     MeshDLO mesh_;
+
+    Eigen::Matrix<Real,3,1> gravity_;
     
     Real density_; // dlo mass per meter cube (kg/m^3)
     Real radius_; // radius of dlo assuming it's cylndrical

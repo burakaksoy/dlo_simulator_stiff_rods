@@ -306,7 +306,8 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
                            dlo_density_,dlo_r_,
                            use_zero_stretch_stiffness_,
                            global_damp_coeff_v_,
-                           global_damp_coeff_w_);
+                           global_damp_coeff_w_,
+                           gravity_);
 
     // Set static particles
     dlo_.setStaticParticles(custom_static_particles_);
@@ -492,7 +493,7 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
 
 
     collision_handler_ = new utilities::CollisionHandler(dlo_, rigid_bodies_);
- 
+
     collision_handler_->setContactTolerance(contact_tolerance_);
 
     collision_handler_->setContactCallback(contactCallbackFunction, this);
@@ -712,6 +713,20 @@ bool DloSimulator::setParticleDynamicityCallback(dlo_simulator_stiff_rods::SetPa
         return true; // Still return true to indicate the service call was processed
     }
 
+    // Update custom_static_particles_ accordingly
+    if (is_dynamic) {
+        // Remove particle_id from custom_static_particles_ if it exists
+        auto it = std::find(custom_static_particles_.begin(), custom_static_particles_.end(), particle_id);
+        if (it != custom_static_particles_.end()) {
+            custom_static_particles_.erase(it);
+        }
+    } else {
+        // Add particle_id to custom_static_particles_ if not already present
+        if (std::find(custom_static_particles_.begin(), custom_static_particles_.end(), particle_id) == custom_static_particles_.end()) {
+            custom_static_particles_.push_back(particle_id);
+        }
+    }
+
     // Check if a subscriber for this particle ID exists
     auto sub_iter = custom_static_particles_odom_subscribers_.find(particle_id);
     auto sub_iter_cmd_vel = custom_static_particles_cmd_vel_subscribers_.find(particle_id);
@@ -781,6 +796,20 @@ void DloSimulator::changeParticleDynamicityCb(const dlo_simulator_stiff_rods::Ch
     } catch (const std::out_of_range& e) {
         ROS_ERROR("Error in changeParticleDynamicityCb: %s", e.what()); // Indicate failure
         return;
+    }
+
+    // Update custom_static_particles_ accordingly
+    if (is_dynamic) {
+        // Remove particle_id from custom_static_particles_ if it exists
+        auto it = std::find(custom_static_particles_.begin(), custom_static_particles_.end(), particle_id);
+        if (it != custom_static_particles_.end()) {
+            custom_static_particles_.erase(it);
+        }
+    } else {
+        // Add particle_id to custom_static_particles_ if not already present
+        if (std::find(custom_static_particles_.begin(), custom_static_particles_.end(), particle_id) == custom_static_particles_.end()) {
+            custom_static_particles_.push_back(particle_id);
+        }
     }
 
     // Check if a subscriber for this particle ID exists
@@ -1179,13 +1208,12 @@ void DloSimulator::simulate(const ros::TimerEvent& e){
     // Small steps (Substep XPBD) 2019 implementation 2 (CORRECT)
 
     for (int i = 0; i< num_substeps_; i++){
-        dlo_.resetForces();
         dlo_.resetLambdas();
 
         dlo_.preSolve(sdt,gravity_);
 
-        int j;
-        for (j = 0; j < num_steps_; j++){
+        for (int j = 0; j < num_steps_; j++){
+            dlo_.resetForces();
 
             // Collision Handling, detect collisions
             if (is_collision_handling_enabled_){
@@ -1193,35 +1221,35 @@ void DloSimulator::simulate(const ros::TimerEvent& e){
             }
             collision_handler_->solveContactPositionConstraints(sdt);
             dlo_.solve(sdt);
-
         }
 
         dlo_.postSolve(sdt);
         collision_handler_->solveContactVelocityConstraints(sdt);
+        
+        // dlo_.normalizeForces(num_steps_);
     }
     // --------------------------------------------------------------
 
     // // --------------------------------------------------------------
     // // XPBD 2016 implementation
-    // dlo_.resetForces();
     // dlo_.resetLambdas();
 
     // dlo_.preSolve(dt_,gravity_);
     
     // for (int i = 0; i< num_steps_; i++){
-    //     int j;
-    //     for (j = 0; j < num_substeps_; j++){
-    //         // Collision Handling, detect collisions
-    //         if (is_collision_handling_enabled_){
-    //             collision_handler_->collisionDetection();  
-    //         }
-    //         collision_handler_->solveContactPositionConstraints(sdt);
-    //         dlo_.solve(sdt);
+    //     dlo_.resetForces();
+    //     // Collision Handling, detect collisions
+    //     if (is_collision_handling_enabled_){
+    //         collision_handler_->collisionDetection();  
     //     }
+    //     collision_handler_->solveContactPositionConstraints(dt_);
+    //     dlo_.solve(dt_);
     // }
 
     // dlo_.postSolve(dt_);
     // collision_handler_->solveContactVelocityConstraints(dt_);
+    
+    // // dlo_.normalizeForces(num_steps_);
     // // --------------------------------------------------------------
 
 
@@ -1234,7 +1262,7 @@ void DloSimulator::simulate(const ros::TimerEvent& e){
 
     // +++++++++++++++++++++++++++++++++++++++++++++++++++==
     // readAttachedRobotForces();
-    dlo_.normalizeForces(num_substeps_);
+    // dlo_.normalizeForces(num_substeps_);
     // +++++++++++++++++++++++++++++++++++++++++++++++++++==
 
     ros::Time finish_time = ros::Time::now();
@@ -1264,8 +1292,28 @@ void DloSimulator::render(const ros::TimerEvent& e){
     // // With some kind of self lock to prevent collision with simulation
     boost::recursive_mutex::scoped_lock lock(mtx_);
 
-    visualization_msgs::MarkerArray markerArray;
     int marker_id = 0;
+
+    // Get the pointers from the DLO instance
+    const std::vector<Eigen::Matrix<Real,3,1>>* pos_ptr = dlo_.getPosPtr();
+    const std::vector<Eigen::Quaternion<Real>>* ori_ptr = dlo_.getOriPtr();
+    const std::vector<Real>* len_ptr = dlo_.getSegmentLengthsPtr();
+
+    // Call the new renderMarkers function
+    renderMarkers(pos_ptr, ori_ptr, len_ptr, pub_dlo_marker_array_, marker_id);
+}
+
+void DloSimulator::renderMarkers(const std::vector<Eigen::Matrix<Real,3,1>>* pos_ptr,
+                                const std::vector<Eigen::Quaternion<Real>>* ori_ptr,
+                                const std::vector<Real>* len_ptr,
+                                ros::Publisher& publisher,
+                                int marker_id = 0)
+{
+    if (dlo_visualization_mode_ == -1){
+        return;
+    }
+
+    visualization_msgs::MarkerArray markerArray;
     // int dlo_visualization_mode_: 
     // 0: Points Only, 
     // 1: Line Segments Only, 
@@ -1273,15 +1321,11 @@ void DloSimulator::render(const ros::TimerEvent& e){
     // 3: Points and Line Segments, 
     // 4: All
 
-    const std::vector<Eigen::Matrix<Real,3,1>> *pos_ptr = dlo_.getPosPtr();
-    const std::vector<Eigen::Quaternion<Real>> *ori_ptr = dlo_.getOriPtr();
-    const std::vector<Real> *len_ptr = dlo_.getSegmentLengthsPtr();
-
     visualization_msgs::Marker pointsMarker, linesMarker, framesMarker;
     createRvizPointsMarker(pos_ptr, pointsMarker);
     createRvizLinesMarker(pos_ptr, ori_ptr, len_ptr, linesMarker);
     createRvizFramesMarker(pos_ptr, ori_ptr, framesMarker); 
-    
+
     if (dlo_visualization_mode_ == 0 || 
         dlo_visualization_mode_ == 3 || 
         dlo_visualization_mode_ == 4) {
@@ -1293,7 +1337,7 @@ void DloSimulator::render(const ros::TimerEvent& e){
         dlo_visualization_mode_ == 2 || 
         dlo_visualization_mode_ == 3 || 
         dlo_visualization_mode_ == 4) {
-        // Render each line segment seperately based on their orientation and length
+        // Render each line segment separately based on their orientation and length
         linesMarker.id = marker_id++;
         markerArray.markers.push_back(linesMarker);
     }
@@ -1304,7 +1348,7 @@ void DloSimulator::render(const ros::TimerEvent& e){
         markerArray.markers.push_back(framesMarker);
     }
 
-    pub_dlo_marker_array_.publish(markerArray);
+    publisher.publish(markerArray);
 }
 
 void DloSimulator::createRvizPointsMarker(const std::vector<Eigen::Matrix<Real,3,1>> *poses, 

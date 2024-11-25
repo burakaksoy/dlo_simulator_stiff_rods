@@ -20,7 +20,8 @@ Dlo::Dlo(const MeshDLO &mesh,
         const Real &radius,
         const bool &use_zero_stretch_stiffness,
         const Real &global_damp_coeff_v,
-        const Real &global_damp_coeff_w):
+        const Real &global_damp_coeff_w,
+        const Eigen::Matrix<Real,3,1> &gravity):
     mesh_(mesh),
     zero_stretch_stiffness_(zero_stretch_stiffness),
     young_modulus_(young_modulus),
@@ -29,7 +30,8 @@ Dlo::Dlo(const MeshDLO &mesh,
     radius_(radius),
     use_zero_stretch_stiffness_(use_zero_stretch_stiffness),
     global_damp_coeff_v_(global_damp_coeff_v),
-    global_damp_coeff_w_(global_damp_coeff_w)
+    global_damp_coeff_w_(global_damp_coeff_w),
+    gravity_(gravity)
 {
     num_particles_ = mesh_.vertices.size();
     num_quaternions_ = mesh_.quaternions.size();
@@ -127,15 +129,17 @@ void Dlo::setStretchBendTwistConstraints(){
         average_segment_lengths_.push_back(averageSegmentLength);
 
         // set initial constraint position info 
-        const Eigen::Matrix<Real,3,3> rot0 = ori_[id0].toRotationMatrix();
-        const Eigen::Matrix<Real,3,3> rot1 = ori_[id1].toRotationMatrix();
+        // const Eigen::Matrix<Real,3,3> rot0 = ori_[id0].toRotationMatrix();
+        // const Eigen::Matrix<Real,3,3> rot1 = ori_[id1].toRotationMatrix();
 
         Eigen::Matrix<Real, 3, 4> constraintPosInfo;
-        // locally each constraint position is along the z axis at the half lenght of the segment
+        // locally each constraint position is along the z axis at the half length of the segment
         constraintPosInfo.col(0) = Eigen::Matrix<Real,3,1>(0,0,0.5*mesh_.segment_lengths[id0]);
         constraintPosInfo.col(1) = Eigen::Matrix<Real,3,1>(0,0,-0.5*mesh_.segment_lengths[id1]);
-        constraintPosInfo.col(2) = rot0 * constraintPosInfo.col(0) + mesh_.vertices[id0];
-        constraintPosInfo.col(3) = rot1 * constraintPosInfo.col(1) + mesh_.vertices[id1];
+        // constraintPosInfo.col(2) = rot0 * constraintPosInfo.col(0) + mesh_.vertices[id0];
+        // constraintPosInfo.col(3) = rot1 * constraintPosInfo.col(1) + mesh_.vertices[id1];
+        constraintPosInfo.col(2) = ori_[id0] * constraintPosInfo.col(0) + mesh_.vertices[id0];
+        constraintPosInfo.col(3) = ori_[id1] * constraintPosInfo.col(1) + mesh_.vertices[id1];
 
         stretchBendTwist_constraintPosInfo_.push_back(constraintPosInfo);
     }
@@ -249,6 +253,22 @@ const Real Dlo::getYoungModulus(){
 
 const Real Dlo::getTorsionModulus(){
     return torsion_modulus_;
+}
+
+const Real Dlo::getZeroStretchStiffness(){
+    return zero_stretch_stiffness_;
+}
+
+const Real Dlo::getDensity(){
+    return density_;
+}
+
+const Real Dlo::getRadius(){
+    return radius_;
+}
+
+const Eigen::Matrix<Real,3,1> Dlo::getGravity(){
+    return gravity_;
 }
 
 void Dlo::preSolve(const Real &dt, const Eigen::Matrix<Real,3,1> &gravity){
@@ -383,8 +403,8 @@ void Dlo::solveStretchBendTwistConstraints(const Real &dt){
         // Current orientations
         Eigen::Quaternion<Real>& q0 = ori_[id0];
         Eigen::Quaternion<Real>& q1 = ori_[id1];
-        const Eigen::Matrix<Real,3,3> rot0 = q0.toRotationMatrix();
-        const Eigen::Matrix<Real,3,3> rot1 = q1.toRotationMatrix();
+        // const Eigen::Matrix<Real,3,3> rot0 = q0.toRotationMatrix();
+        // const Eigen::Matrix<Real,3,3> rot1 = q1.toRotationMatrix();
 
         // // Previous positions for damping
         // const Eigen::Matrix<Real,3,1>& p0_prev = prev_pos_[id0];
@@ -398,15 +418,19 @@ void Dlo::solveStretchBendTwistConstraints(const Real &dt){
         Eigen::Matrix<Real,3,3> inertiaInverseW0 = inv_iner_[id0]; // local
         Eigen::Matrix<Real,3,3> inertiaInverseW1 = inv_iner_[id1]; // local
 
-        inertiaInverseW0 = rot0*inertiaInverseW0 * rot0.transpose(); //world
-        inertiaInverseW1 = rot1*inertiaInverseW1 * rot1.transpose(); //world
+        // inertiaInverseW0 = rot0*inertiaInverseW0 * rot0.transpose(); //world
+        // inertiaInverseW1 = rot1*inertiaInverseW1 * rot1.transpose(); //world
+        inertiaInverseW0 = q0 * inertiaInverseW0 * q0.conjugate(); //world
+        inertiaInverseW1 = q1 * inertiaInverseW1 * q1.conjugate(); //world
 
         // Current constraint pos info needs to be updated
         Eigen::Matrix<Real, 3, 4>& constraintPosInfo = stretchBendTwist_constraintPosInfo_[i];
 
         // update constraint (for eqn 23, upper part)
-        constraintPosInfo.col(2) = rot0 * constraintPosInfo.col(0) + p0;
-        constraintPosInfo.col(3) = rot1 * constraintPosInfo.col(1) + p1;
+        // constraintPosInfo.col(2) = rot0 * constraintPosInfo.col(0) + p0;
+        // constraintPosInfo.col(3) = rot1 * constraintPosInfo.col(1) + p1;
+        constraintPosInfo.col(2) = q0 * constraintPosInfo.col(0) + p0;
+        constraintPosInfo.col(3) = q1 * constraintPosInfo.col(1) + p1;
 
         const Eigen::Matrix<Real,3,1>& connector0 = constraintPosInfo.col(2);
         const Eigen::Matrix<Real,3,1>& connector1 = constraintPosInfo.col(3);

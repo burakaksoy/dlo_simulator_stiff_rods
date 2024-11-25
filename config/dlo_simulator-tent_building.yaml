@@ -5,7 +5,7 @@ gravity_z: -9.804 # m/s^2
 
 dt: 0.002 #0.08 # 0.002 # seconds. Simulated time per iteration of the dlo simulation.
 set_sim_rate_auto: false  # to set the simulation rate and dt automaticall, do not use
-num_substeps: 40 # 2000 #40 # Number of substeps per iteration based on 2019 Small Steps XPBD paper.
+num_substeps: 80 # 2000 #40 # Number of substeps per iteration based on 2019 Small Steps XPBD paper.
 num_steps: 1 # experimental only. do not change from 1
 
 dlo_l: 3.3528 # 2.25 # 3.3528 # dlo length in meters
@@ -13,7 +13,7 @@ dlo_r: 0.0035 # 0.0035 # 0.0035 # dlo radius in meters
 dlo_density: 1792.89 # dlo mass per meter cube (kg/m^3)
 dlo_num_segments: 40 # max 45 # number of segment in dlo (int)
 
-dlo_zero_stretch_stiffness: 1.0e+14
+dlo_zero_stretch_stiffness: 1.0e+7
 dlo_young_modulus: 3.0e+10 # 3.0e+7 # E, elasticity modulus (unit: Pa?)
 dlo_torsion_modulus: 1.0e+10 # 1.0e+7 # G, Shear modulus in classical phsysics. (unit: Pa?)
 
@@ -87,8 +87,8 @@ dlo_visualization_mode: 4 # -1: Disabled, # 0: Points Only, 1: Line Segments Onl
 # Note that using less data in the visualization helps to save network bandwith
 point_marker_scale: 0.015
 point_marker_color_rgba: [1.0, 0.0, 1.0, 1.0]
-line_marker_scale_multiplier: 6.0 # multiplies dlo_r with this scale
-line_marker_color_rgba: [0.0, 1.0, 1.0, 1.0]
+line_marker_scale_multiplier: 8.0 # 6.0 # multiplies dlo_r with this scale
+line_marker_color_rgba: [0.0, 0.0, 0.0, 1.0] # [0.0, 1.0, 1.0, 1.0]
 frame_marker_scale: 0.003 # m (for thickness)
 frame_marker_axis_length: 0.03 # m (for length of the axes line segments)
 
