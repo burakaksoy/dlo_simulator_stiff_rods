@@ -114,6 +114,13 @@ private:
     // Timer callback functions
     void simulate(const ros::TimerEvent& e);
     void render(const ros::TimerEvent& e);
+    
+    void renderMarkers(const std::vector<Eigen::Matrix<Real,3,1>>* pos_ptr,
+                        const std::vector<Eigen::Quaternion<Real>>* ori_ptr,
+                        const std::vector<Real>* len_ptr,
+                        ros::Publisher& publisher,
+                        int marker_id);
+
     /*
     void publishWrenches(const ros::TimerEvent& e);
     */
