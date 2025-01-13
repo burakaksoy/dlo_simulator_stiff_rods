@@ -221,6 +221,11 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
 
     nh_local_.param<std::string>("dlo_state_topic_name", dlo_state_topic_name_, std::string("dlo_state"));
     nh_local_.param<std::string>("dlo_markers_topic_name", dlo_markers_topic_name_, std::string("dlo_markers"));
+
+    nh_local_.param<std::string>("dlo_markers_energy_based_topic_name", 
+                                    dlo_markers_energy_based_topic_name_, 
+                                    std::string("dlo_markers_energy_based"));
+    
     nh_local_.param<std::string>("dlo_frame_id", dlo_frame_id_, std::string("map"));
     
     /*
@@ -261,6 +266,8 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
     nh_local_.param<std::string>("change_dlo_torsion_modulus_topic_name", change_dlo_torsion_modulus_topic_name_, std::string("change_dlo_torsion_modulus"));
     
     nh_local_.param<std::string>("enable_collision_handling_service_name", enable_collision_handling_service_name_, std::string("enable_collision_handling"));
+
+    nh_local_.param<std::string>("test_energy_based_solver_service_name", test_energy_based_solver_service_name_, std::string("test_energy_based_solver"));
     
     nh_local_.param<Real>("rb_line_marker_scale_multiplier", rb_line_marker_scale_multiplier_, 1.0);
     
@@ -529,6 +536,7 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
             // Create visualization marker publisher
             pub_dlo_state_ = nh_.advertise<dlo_simulator_stiff_rods::SegmentStateArray>(dlo_state_topic_name_, 1);
             pub_dlo_marker_array_ = nh_.advertise<visualization_msgs::MarkerArray>(dlo_markers_topic_name_, 1);
+            pub_dlo_energy_based_marker_array_ = nh_.advertise<visualization_msgs::MarkerArray>(dlo_markers_energy_based_topic_name_, 1);
 
             // Create a subscriber for each custom static particle
             for (const int& particle_id : custom_static_particles_) {
@@ -605,6 +613,9 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
             enable_collision_handling_srv_ = nh_local_.advertiseService(enable_collision_handling_service_name_,
                                                                     &DloSimulator::enableCollisionHandlingCallback, this);
 
+            test_energy_based_solver_srv_ = nh_local_.advertiseService(test_energy_based_solver_service_name_,
+                                                                    &DloSimulator::testEnergyBasedSolverCallback, this);
+
             // Start timers
             timer_simulate_.start();
             timer_render_.start();
@@ -621,6 +632,7 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
             // Stop publishers
             pub_dlo_state_.shutdown();
             pub_dlo_marker_array_.shutdown();
+            pub_dlo_energy_based_marker_array_.shutdown();
 
             // Stop subscribers
             sub_change_particle_dynamicity_.shutdown();
@@ -858,6 +870,10 @@ void DloSimulator::changeParticleDynamicityCb(const dlo_simulator_stiff_rods::Ch
             custom_static_particles_cmd_vel_subscribers_[particle_id] = sub; // Add the new subscriber to the map
         }
     }
+
+    // FOR TESTING ONLY
+    std_srvs::Empty empt; 
+    testEnergyBasedSolverCallback(empt.request, empt.response);
 }
 
 void DloSimulator::changeYoungModulusCb(const std_msgs::Float32::ConstPtr msg){
@@ -916,6 +932,46 @@ bool DloSimulator::enableCollisionHandlingCallback(dlo_simulator_stiff_rods::Ena
     }
 
     res.success = true;
+    return true;
+}
+
+bool DloSimulator::testEnergyBasedSolverCallback(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res)
+{
+    // Log the message
+    ROS_INFO("Test energy based solver service called.");
+
+    // Create an energy based solver object
+    utilities::EnergyBasedSolver* energy_based_solver_ = new utilities::EnergyBasedSolver();
+
+    // -----------------------------------------
+    // Set the optimization options
+    utilities::EnergyBasedSolver::OptimizeOptions optimize_options;
+    // optimize_options.function_tolerance = 1e-8;
+    // -----------------------------------------
+
+    // std::vector<int> manual_static_particles = {0}; // manually set static particles
+
+    // Call the optimizeShape function to calculate the optimized shape.
+    // Dlo shape is represented with a MeshDLO struct object.
+    pbd_object::MeshDLO dlo_state_opt = energy_based_solver_->optimizeShape(dlo_, 
+                                                                            optimize_options,
+                                                                            // manual_static_particles);
+                                                                            custom_static_particles_);
+
+    // It can be rendered with:
+    // utilities::EnergyBasedSolver::renderState(dlo_state_opt, "DLO optimized shape");
+    int marker_id = 0;
+
+    // Get the pointers from the DLO instance
+    const std::vector<Eigen::Matrix<Real,3,1>>* pos_ptr = &dlo_state_opt.vertices;
+    const std::vector<Eigen::Quaternion<Real>>* ori_ptr = &dlo_state_opt.quaternions;
+    const std::vector<Real>* len_ptr = &dlo_state_opt.segment_lengths;
+
+    renderMarkers(pos_ptr, ori_ptr, len_ptr, pub_dlo_energy_based_marker_array_, marker_id);
+
+    // It can be saved to a file with the saveMeshDLO function. TODO:
+    // utilities::EnergyBasedSolver::saveStateAsNpy(dlo_state_opt, "dlo_optimized_shape.npy");
+
     return true;
 }
 

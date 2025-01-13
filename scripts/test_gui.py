@@ -57,8 +57,8 @@ class TestGUI(qt_widgets.QWidget):
         self.cmd_vel_topic_prefix = None
         self.odom_topic_leader = None
         
-        simulator_node_name = "/dlo_simulator_stiff_rods_node"
-        # simulator_node_name = ""
+        # simulator_node_name = "/dlo_simulator_stiff_rods_node"
+        simulator_node_name = ""
         
         while not self.particles:
             try:
@@ -86,8 +86,8 @@ class TestGUI(qt_widgets.QWidget):
 
         # Service clients and publishers for modulus values
         
-        self.initialize_modulus_services_and_publishers(simulator_node_name)
-        # self.initialize_modulus_services_and_publishers(simulator_node_name="/dlo_simulator")
+        # self.initialize_modulus_services_and_publishers(simulator_node_name)
+        self.initialize_modulus_services_and_publishers(simulator_node_name="/dlo_simulator")
 
         self.createUI()
 

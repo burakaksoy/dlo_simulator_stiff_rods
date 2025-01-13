@@ -52,6 +52,7 @@
 #include "dlo_simulator_stiff_rods/utilities/dlo.h"
 #include "dlo_simulator_stiff_rods/utilities/rigid_body_scene_loader.h"
 #include "dlo_simulator_stiff_rods/utilities/collision_handler.h"
+#include "dlo_simulator_stiff_rods/utilities/energy_based_solver.h"
 
 #include <memory> // needed for std::unique_ptr and std::make_unique
 
@@ -171,8 +172,12 @@ private:
     bool getDloTorsionModulusCallback(dlo_simulator_stiff_rods::GetDloTorsionModulus::Request &req,
                                         dlo_simulator_stiff_rods::GetDloTorsionModulus::Response &res);
 
+    // Create enableCollisionHandling service callback
     bool enableCollisionHandlingCallback(dlo_simulator_stiff_rods::EnableCollisionHandling::Request &req,
                                         dlo_simulator_stiff_rods::EnableCollisionHandling::Response &res);
+
+    // Test energy based solver service callback
+    bool testEnergyBasedSolverCallback(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res);
 
     // ROS variables---------------------------------
     ros::NodeHandle nh_;
@@ -181,6 +186,7 @@ private:
 
     ros::Publisher pub_dlo_state_;
     ros::Publisher pub_dlo_marker_array_;
+    ros::Publisher pub_dlo_energy_based_marker_array_;
     /*
     ros::Publisher pub_wrench_stamped_01_;
     ros::Publisher pub_wrench_stamped_02_;
@@ -206,6 +212,8 @@ private:
     ros::ServiceServer get_torsion_modulus_srv_;
 
     ros::ServiceServer enable_collision_handling_srv_;
+
+    ros::ServiceServer test_energy_based_solver_srv_;
 
     // Map to hold particle ID and its corresponding subscriber
     std::map<int, ros::Subscriber> custom_static_particles_odom_subscribers_;
@@ -283,6 +291,7 @@ private:
 
     std::string dlo_state_topic_name_;
     std::string dlo_markers_topic_name_;
+    std::string dlo_markers_energy_based_topic_name_;
     std::string dlo_frame_id_;
     
     /*
@@ -310,6 +319,8 @@ private:
     std::string change_dlo_torsion_modulus_topic_name_;
 
     std::string enable_collision_handling_service_name_;
+
+    std::string test_energy_based_solver_service_name_;
 
     // Dlo visualization parameters 
     Real point_marker_scale_;

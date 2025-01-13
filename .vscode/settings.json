@@ -75,6 +75,8 @@
         "regex": "cpp",
         "future": "cpp",
         "forward_list": "cpp",
-        "geometry": "cpp"
+        "geometry": "cpp",
+        "core": "cpp",
+        "*.ipp": "cpp"
     }
 }

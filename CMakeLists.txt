@@ -50,7 +50,17 @@ find_package(catkin REQUIRED COMPONENTS
 
 ## System dependencies are found with CMake's conventions
 find_package(Boost REQUIRED COMPONENTS system chrono)
+# find_package(Boost REQUIRED system filesystem date_time thread)
+
+# Eigen
+# include_directories("/usr/include/eigen3") # custom installed eigen 3.4.0
 find_package(Eigen3)
+
+# # ifopt
+# find_package(ifopt)
+
+# ceres
+find_package(Ceres REQUIRED)
 
 # Print eigen3 include directory and version
 message(STATUS "Eigen3 include directory: ${EIGEN3_INCLUDE_DIR}")
@@ -210,6 +220,8 @@ include_directories(${EIGEN3_INCLUDE_DIRS})
 include_directories(${Boost_INCLUDE_DIRS})
 include_directories(${OpenMP_INCLUDE_DIRS})
 include_directories(${Discregrid_INCLUDE_DIR})
+include_directories(${CERES_INCLUDE_DIRS})
+include_directories("/usr/local/cnpy.h") # cnpy, numpy file reader/saver for c++
 
 #
 # Build libs
@@ -225,6 +237,7 @@ add_library(dlo_simulator_stiff_rods
     src/dlo_simulator_stiff_rods/utilities/rigid_body_scene_loader.cpp 
     src/dlo_simulator_stiff_rods/utilities/collision_handler.cpp
     src/dlo_simulator_stiff_rods/utilities/BoundingSphereHierarchy.cpp
+    src/dlo_simulator_stiff_rods/utilities/energy_based_solver.cpp
 )   
 
 # target_compile_options(dlo_simulator_stiff_rods PRIVATE ${OpenMP_FLAGS})
@@ -234,6 +247,10 @@ target_link_libraries(dlo_simulator_stiff_rods
     ${Boost_LIBRARIES} 
     ${OpenMP_LIBRARIES}
     ${Discregrid_LIBRARIES}
+    # ${ifopt_LIBRARIES}
+    ${CERES_LIBRARIES}
+    ${CNPY_LIBRARIES}
+    cnpy z # for cnpy & (zlib)
 )
 # Standard dependencies
 add_dependencies(dlo_simulator_stiff_rods 
