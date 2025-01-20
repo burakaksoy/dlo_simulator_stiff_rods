@@ -76,7 +76,8 @@ rb_scene_config_path: ""
 # rb_scene_config_path: $(find dlo_simulator_stiff_rods)/config/scenes/DloOnCylinderUnitBox.json
 # rb_scene_config_path: $(find dlo_simulator_stiff_rods)/config/scenes/DloOnCylinderVaseUnitBox.json
 # rb_scene_config_path: $(find dlo_simulator_stiff_rods)/config/scenes/DloOnFloor.json
-rb_scene_config_path: $(find dlo_simulator_stiff_rods)/config/scenes/TentBuilding.json
+# rb_scene_config_path: $(find dlo_simulator_stiff_rods)/config/scenes/TentBuilding.json
+rb_scene_config_path: $(find dlo_simulator_stiff_rods)/config/scenes/TentBuildingReal.json
 
 
 # DLO VISUALIZATION RELATED PARAMETERS

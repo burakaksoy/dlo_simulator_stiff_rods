@@ -80,8 +80,28 @@
 			"collisionObjectScale": [1,1,1],
 			"resolutionSDF": [250,250,250],
 			"invertSDF": 0
+		},
+		{
+			"id": 5,
+			"geometryFile": "/home/burak/catkin_ws_deformable/src/dlo_simulator_stiff_rods/data/mesh/cube_5.obj",
+			"isDynamic": 0,
+			"density": 500, 
+			"translation": [1.85,2.5,1.61],
+			"rotationAxis": [0, 0, 1.0],
+			"rotationAngle": 0.0,
+			"scale": [3.7, 5.0, 0.02],
+			"velocity": [0,0,0],
+			"angularVelocity": [0,0,0],
+			"restitution" : 0.2,
+			"frictionStatic" : 7.4,
+			"frictionDynamic" : 7.2,
+			"comment": "collisionObjectFileName can contain the path of an SDF file or if it is empty, the simulator will generate an SDF using the mesh in the geometryFile",
+			"collisionObjectFileName": "../scenes/Cache/sphere.obj_50_50_50.csdf",
+			"collisionObjectScale": [3.7, 5.0, 0.02],
+			"resolutionSDF": [60,60,60],
+			"invertSDF": 0,
+			"isVisible": 0
 		}
-
 	]
 }
 
