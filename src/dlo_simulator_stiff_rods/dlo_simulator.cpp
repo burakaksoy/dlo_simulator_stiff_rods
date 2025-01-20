@@ -340,6 +340,7 @@ bool DloSimulator::updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::
             std::cout << "Collision Object Scale: " << rbd.m_collisionObjectScale << std::endl;
             std::cout << "Resolution SDF: " << rbd.m_resolutionSDF << std::endl;
             std::cout << "Invert SDF: " << std::boolalpha << rbd.m_invertSDF << std::endl;
+            std::cout << "Is Visible: " << std::boolalpha << rbd.m_isVisible << std::endl;
             std::cout << "---------------------------------------" << std::endl;
         }
         */
@@ -1497,6 +1498,9 @@ void DloSimulator::renderRigidBodies(const ros::TimerEvent& e){
     // int rb_visualization_mode_ = 0; // 0: Mesh Only, 1: Wireframe Only, 2: Both
 
     for (const utilities::RigidBodySceneLoader::RigidBodyData& rbd : rigid_bodies_) {
+        if (!rbd.m_isVisible) {
+            continue;
+        }
         visualization_msgs::Marker meshMarker, wireframeMarker;
         createMeshAndWireframeMarkers(&rbd.m_mesh.vertices, &rbd.m_mesh.face_tri_ids, meshMarker, wireframeMarker);
 
