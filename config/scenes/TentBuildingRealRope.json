@@ -86,7 +86,7 @@
 			"geometryFile": "/home/burak/catkin_ws_deformable/src/dlo_simulator_stiff_rods/data/mesh/cube_5.obj",
 			"isDynamic": 0,
 			"density": 500, 
-			"translation": [1.85,2.5,1.61],
+			"translation": [1.85,2.5,1.51],
 			"rotationAxis": [0, 0, 1.0],
 			"rotationAngle": 0.0,
 			"scale": [3.7, 5.0, 0.02],
