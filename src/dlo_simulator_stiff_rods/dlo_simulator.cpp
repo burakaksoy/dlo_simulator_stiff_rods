@@ -700,173 +700,102 @@ void DloSimulator::reset(){
     nh_local_.setParam("reset",false);
 }
 
-bool DloSimulator::setParticleDynamicityCallback(dlo_simulator_stiff_rods::SetParticleDynamicity::Request &req,
-                                                 dlo_simulator_stiff_rods::SetParticleDynamicity::Response &res)
+// Service callback uses the helper function.
+bool DloSimulator::setParticleDynamicityCallback(
+    dlo_simulator_stiff_rods::SetParticleDynamicity::Request &req,
+    dlo_simulator_stiff_rods::SetParticleDynamicity::Response &res)
 {
-    int particle_id = req.particle_id;
-    bool is_dynamic = req.is_dynamic;
-    
+    bool success = updateParticleDynamicityCommon(req.particle_id, req.is_dynamic);
+    res.success = success;
+    return true; // Always return true to indicate the service was processed.
+}
+
+// Message callback also uses the helper function.
+void DloSimulator::changeParticleDynamicityCb(const dlo_simulator_stiff_rods::ChangeParticleDynamicity::ConstPtr& msg) {
+    updateParticleDynamicityCommon(msg->particle_id, msg->is_dynamic);
+}
+
+// Helper function that encapsulates the shared logic.
+bool DloSimulator::updateParticleDynamicityCommon(int particle_id, bool is_dynamic) {
+    // Change particle dynamicity and catch potential errors.
     try {
         dlo_.changeParticleDynamicity(particle_id, is_dynamic);
     } catch (const std::out_of_range& e) {
-        ROS_ERROR("Error in setParticleDynamicity: %s", e.what());
-        res.success = false; // Indicate failure
-        return true; // Still return true to indicate the service call was processed
+        ROS_ERROR("Error in updateParticleDynamicityCommon: %s", e.what());
+        return false;
     }
 
-    // Update custom_static_particles_ accordingly
+    // Update custom_static_particles_ accordingly.
     if (is_dynamic) {
-        // Remove particle_id from custom_static_particles_ if it exists
         auto it = std::find(custom_static_particles_.begin(), custom_static_particles_.end(), particle_id);
         if (it != custom_static_particles_.end()) {
             custom_static_particles_.erase(it);
+            ROS_INFO("Particle %d set to dynamic and removed from custom_static_particles_", particle_id);
+        } else {
+            ROS_INFO("Particle %d not found in custom_static_particles_", particle_id);
         }
     } else {
-        // Add particle_id to custom_static_particles_ if not already present
         if (std::find(custom_static_particles_.begin(), custom_static_particles_.end(), particle_id) == custom_static_particles_.end()) {
             custom_static_particles_.push_back(particle_id);
+            ROS_INFO("Particle %d set to static and added to custom_static_particles_", particle_id);
+        } else {
+            ROS_INFO("Particle %d already exists in custom_static_particles_", particle_id);
         }
     }
 
-    // Check if a subscriber for this particle ID exists
+    // Manage odom and cmd_vel subscribers.
     auto sub_iter = custom_static_particles_odom_subscribers_.find(particle_id);
     auto sub_iter_cmd_vel = custom_static_particles_cmd_vel_subscribers_.find(particle_id);
 
-    if (is_dynamic){  // particle is being tried to set dynamic
+    if (is_dynamic) {
         if (sub_iter != custom_static_particles_odom_subscribers_.end()) {
-            // Subscriber exists, shut it down
             sub_iter->second.shutdown();
-            custom_static_particles_odom_subscribers_.erase(sub_iter); // Remove the subscriber from the map
-            res.success = true;
+            custom_static_particles_odom_subscribers_.erase(sub_iter);
+            ROS_INFO("Odom subscriber for particle %d shut down", particle_id);
         } else {
-            // No subscriber was found for the given ID
-            res.success = false; 
+            ROS_INFO("No odom subscriber found for particle %d", particle_id);
         }
-
         if (sub_iter_cmd_vel != custom_static_particles_cmd_vel_subscribers_.end()) {
-            // Subscriber exists, shut it down
             sub_iter_cmd_vel->second.shutdown();
-            custom_static_particles_cmd_vel_subscribers_.erase(sub_iter_cmd_vel); // Remove the subscriber from the map
-            res.success = true;
+            custom_static_particles_cmd_vel_subscribers_.erase(sub_iter_cmd_vel);
+            ROS_INFO("Cmd_vel subscriber for particle %d shut down", particle_id);
         } else {
-            // No subscriber was found for the given ID
-            res.success = false; 
+            ROS_INFO("No cmd_vel subscriber found for particle %d", particle_id);
         }
-    }
-    else{ // particle is being tried to set static
-        if (sub_iter != custom_static_particles_odom_subscribers_.end()) {
-            // Subscriber already exists, so just return with success
-            res.success = true;
-        } else {
-            // Subscriber does not exist, create a new one
+    } else {
+        if (sub_iter == custom_static_particles_odom_subscribers_.end()) {
             std::string topic = custom_static_particles_odom_topic_prefix_ + std::to_string(particle_id);
             ros::Subscriber sub = nh_.subscribe<nav_msgs::Odometry>(topic, 1,
-                                                                    [this, particle_id](const nav_msgs::Odometry::ConstPtr& odom_msg) { 
-                                                                        this->odometryCb_custom_static_particles(odom_msg, particle_id); }
-                                                                    );
-            custom_static_particles_odom_subscribers_[particle_id] = sub; // Add the new subscriber to the map
-
-            res.success = true; // Indicate success
-        }
-
-        if (sub_iter_cmd_vel != custom_static_particles_cmd_vel_subscribers_.end()) {
-            // Subscriber already exists, so just return with success
-            res.success = true;
+                [this, particle_id](const nav_msgs::Odometry::ConstPtr& odom_msg) {
+                    this->odometryCb_custom_static_particles(odom_msg, particle_id);
+                });
+            custom_static_particles_odom_subscribers_[particle_id] = sub;
+            ROS_INFO("Odom subscriber for particle %d created", particle_id);
         } else {
-            // Subscriber does not exist, create a new one
+            ROS_INFO("Odom subscriber for particle %d already exists", particle_id);
+        }
+        if (sub_iter_cmd_vel == custom_static_particles_cmd_vel_subscribers_.end()) {
             std::string topic = custom_static_particles_cmd_vel_topic_prefix_ + std::to_string(particle_id);
             ros::Subscriber sub = nh_.subscribe<geometry_msgs::Twist>(topic, 10,
-                                                                    [this, particle_id](const geometry_msgs::Twist::ConstPtr& twist_msg) { 
-                                                                        this->cmdVelCb_custom_static_particles(twist_msg, particle_id); }
-                                                                    );
-            custom_static_particles_cmd_vel_subscribers_[particle_id] = sub; // Add the new subscriber to the map
-
-            res.success = true; // Indicate success
+                [this, particle_id](const geometry_msgs::Twist::ConstPtr& twist_msg) {
+                    this->cmdVelCb_custom_static_particles(twist_msg, particle_id);
+                });
+            custom_static_particles_cmd_vel_subscribers_[particle_id] = sub;
+            ROS_INFO("Cmd_vel subscriber for particle %d created", particle_id);
+        } else {
+            ROS_INFO("Cmd_vel subscriber for particle %d already exists", particle_id);
         }
     }
 
     return true;
 }
 
-void DloSimulator::changeParticleDynamicityCb(const dlo_simulator_stiff_rods::ChangeParticleDynamicity::ConstPtr msg){
-    int particle_id = msg->particle_id;
-    bool is_dynamic = msg->is_dynamic;
-    
-    try {
-        dlo_.changeParticleDynamicity(particle_id, is_dynamic);
-    } catch (const std::out_of_range& e) {
-        ROS_ERROR("Error in changeParticleDynamicityCb: %s", e.what()); // Indicate failure
-        return;
-    }
-
-    // Update custom_static_particles_ accordingly
-    if (is_dynamic) {
-        // Remove particle_id from custom_static_particles_ if it exists
-        auto it = std::find(custom_static_particles_.begin(), custom_static_particles_.end(), particle_id);
-        if (it != custom_static_particles_.end()) {
-            custom_static_particles_.erase(it);
-        }
-    } else {
-        // Add particle_id to custom_static_particles_ if not already present
-        if (std::find(custom_static_particles_.begin(), custom_static_particles_.end(), particle_id) == custom_static_particles_.end()) {
-            custom_static_particles_.push_back(particle_id);
-        }
-    }
-
-    // Check if a subscriber for this particle ID exists
-    auto sub_iter = custom_static_particles_odom_subscribers_.find(particle_id);
-    auto sub_iter_cmd_vel = custom_static_particles_cmd_vel_subscribers_.find(particle_id);
-
-    if (is_dynamic){  // particle is being tried to set dynamic
-        if (sub_iter != custom_static_particles_odom_subscribers_.end()) {
-            // Subscriber exists, shut it down
-            sub_iter->second.shutdown();
-            custom_static_particles_odom_subscribers_.erase(sub_iter); // Remove the subscriber from the map
-        } else {
-            // No subscriber was found for the given ID
-        }
-
-        if (sub_iter_cmd_vel != custom_static_particles_cmd_vel_subscribers_.end()) {
-            // Subscriber exists, shut it down
-            sub_iter_cmd_vel->second.shutdown();
-            custom_static_particles_cmd_vel_subscribers_.erase(sub_iter_cmd_vel); // Remove the subscriber from the map
-        } else {
-            // No subscriber was found for the given ID
-        }
-    }
-    else{ // particle is being tried to set static
-        if (sub_iter != custom_static_particles_odom_subscribers_.end()) {
-            // Subscriber already exists, so just return with success
-        } else {
-            // Subscriber does not exist, create a new one
-            std::string topic = custom_static_particles_odom_topic_prefix_ + std::to_string(particle_id);
-            ros::Subscriber sub = nh_.subscribe<nav_msgs::Odometry>(topic, 1,
-                                                                    [this, particle_id](const nav_msgs::Odometry::ConstPtr& odom_msg) { 
-                                                                        this->odometryCb_custom_static_particles(odom_msg, particle_id); }
-                                                                    );
-            custom_static_particles_odom_subscribers_[particle_id] = sub; // Add the new subscriber to the map
-        }
-
-        if (sub_iter_cmd_vel != custom_static_particles_cmd_vel_subscribers_.end()) {
-            // Subscriber already exists, so just return with success
-        } else {
-            // Subscriber does not exist, create a new one
-            std::string topic = custom_static_particles_cmd_vel_topic_prefix_ + std::to_string(particle_id);
-            ros::Subscriber sub = nh_.subscribe<geometry_msgs::Twist>(topic, 10,
-                                                                    [this, particle_id](const geometry_msgs::Twist::ConstPtr& twist_msg) { 
-                                                                        this->cmdVelCb_custom_static_particles(twist_msg, particle_id); }
-                                                                    );
-            custom_static_particles_cmd_vel_subscribers_[particle_id] = sub; // Add the new subscriber to the map
-        }
-    }
-}
-
-void DloSimulator::changeYoungModulusCb(const std_msgs::Float32::ConstPtr msg){
+void DloSimulator::changeYoungModulusCb(const std_msgs::Float32::ConstPtr& msg){
     Real young_modulus = msg->data;
     dlo_.setYoungModulus(young_modulus);
 }
 
-void DloSimulator::changeTorsionModulusCb(const std_msgs::Float32::ConstPtr msg){
+void DloSimulator::changeTorsionModulusCb(const std_msgs::Float32::ConstPtr& msg){
     Real torsion_modulus = msg->data;
     dlo_.setTorsionModulus(torsion_modulus);
 }

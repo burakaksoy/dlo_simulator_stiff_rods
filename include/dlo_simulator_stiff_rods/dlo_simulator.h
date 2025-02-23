@@ -145,11 +145,12 @@ private:
     void cmdVelCb_custom_static_particles(const geometry_msgs::Twist::ConstPtr& twist_msg, const int& id);
     
     // Change Dynamicity callback function
-    void changeParticleDynamicityCb(const dlo_simulator_stiff_rods::ChangeParticleDynamicity::ConstPtr change_particle_dynamicity_msg);
+    void changeParticleDynamicityCb(const dlo_simulator_stiff_rods::ChangeParticleDynamicity::ConstPtr& change_particle_dynamicity_msg);
+    bool updateParticleDynamicityCommon(int particle_id, bool is_dynamic);
 
     // Change Young Modulus and Torsion Modulus callback functions
-    void changeYoungModulusCb(const std_msgs::Float32::ConstPtr young_modulus_msg);
-    void changeTorsionModulusCb(const std_msgs::Float32::ConstPtr torsion_modulus_msg);
+    void changeYoungModulusCb(const std_msgs::Float32::ConstPtr& young_modulus_msg);
+    void changeTorsionModulusCb(const std_msgs::Float32::ConstPtr& torsion_modulus_msg);
     
     // Service functions
     bool updateParams(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res);
