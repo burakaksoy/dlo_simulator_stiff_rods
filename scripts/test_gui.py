@@ -57,8 +57,16 @@ class TestGUI(qt_widgets.QWidget):
         self.cmd_vel_topic_prefix = None
         self.odom_topic_leader = None
         
-        simulator_node_name = "/dlo_simulator_stiff_rods_node"
-        # simulator_node_name = ""
+        mode = "simulation_test"  # Default mode. Use this mode for default fabric simulation test
+        # mode = "tent_building_application_test"  # Use this mode for testing the tent building application
+        
+        self.mode = rospy.get_param("~mode", mode)
+        
+        if self.mode == "simulation_test":
+            simulator_node_name = "/dlo_simulator_stiff_rods_node"
+        elif self.mode == "tent_building_application_test":
+            simulator_node_name = "/dlo_simulator"
+            # simulator_node_name = ""
         
         while not self.particles:
             try:
@@ -85,9 +93,11 @@ class TestGUI(qt_widgets.QWidget):
         self.binded_relative_poses = {}
 
         # Service clients and publishers for modulus values
-        
-        self.initialize_modulus_services_and_publishers(simulator_node_name)
-        # self.initialize_modulus_services_and_publishers(simulator_node_name="/dlo_simulator")
+        if self.mode == "simulation_test":
+            self.initialize_modulus_services_and_publishers(simulator_node_name)
+        elif self.mode == "tent_building_application_test":
+            self.initialize_modulus_services_and_publishers(simulator_node_name)
+            # self.initialize_modulus_services_and_publishers(simulator_node_name="/dlo_simulator")
 
         self.createUI()
 

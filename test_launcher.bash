@@ -10,7 +10,7 @@ sleep 4s;
 gnome-terminal --tab --title="Simulator" --command "bash -c \"source ~/.bashrc; roslaunch dlo_simulator_stiff_rods dlo_simulator.launch; exec bash\"";
 sleep 1s;
 
-gnome-terminal --tab --title="Test GUI" --command "bash -c \"source ~/.bashrc; rosrun dlo_simulator_stiff_rods test_gui.py; exec bash\"";
+gnome-terminal --tab --title="Test GUI" --command "bash -c \"source ~/.bashrc; rosrun dlo_simulator_stiff_rods test_gui.py _mode:="simulation_test"; exec bash\"";
 sleep 1s;
 
 # Use it to publish spacenav_twist msg
